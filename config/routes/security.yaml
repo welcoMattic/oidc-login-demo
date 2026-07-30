@@ -1,3 +1,11 @@
 _security_logout:
     resource: security.route_loader.logout
     type: service
+
+# The OIDC login backbone ships an OidcLoginRouteLoader (tagged routing.route_loader)
+# that registers a callback route per firewall, but no Flex recipe imports it yet
+# (unlike the logout loader above, which the security-bundle recipe wires in). Without
+# this import the provider redirect lands on an unrouted /<fw>/callback and 404s.
+_oidc_login_callbacks:
+    resource: security.authenticator.oidc_login.route_loader
+    type: service

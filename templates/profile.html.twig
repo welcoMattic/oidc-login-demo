@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Logged in via {{ label }}{% endblock %}
+
+{% block body %}
+<main style="max-width:720px;margin:3rem auto;font-family:system-ui,sans-serif;padding:0 1rem">
+    <p><a href="{{ path('app_home') }}">&larr; back</a></p>
+    <h1>Logged in via {{ label }} ✅</h1>
+
+    {% if user %}
+        <table style="border-collapse:collapse;margin-top:1.5rem;width:100%">
+            <tbody>
+                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">User identifier</th>
+                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee"><code>{{ user.userIdentifier }}</code></td></tr>
+                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">sub</th>
+                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee"><code>{{ user.sub }}</code></td></tr>
+                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">Roles</th>
+                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee"><code>{{ user.roles|join(', ') }}</code></td></tr>
+                {% if user.email %}
+                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">email</th>
+                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee">{{ user.email }}</td></tr>
+                {% endif %}
+                {% if user.name %}
+                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">name</th>
+                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee">{{ user.name }}</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+        {% if user.additionalClaims is not empty %}
+            <h2 style="margin-top:2rem;font-size:1rem">Additional claims</h2>
+            <pre style="background:#f6f6f6;padding:1rem;border-radius:6px;overflow:auto">{{ user.additionalClaims|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+        {% endif %}
+    {% endif %}
+
+    <p style="margin-top:2rem">
+        <a href="/{{ key }}/logout"
+           style="display:inline-block;padding:.5rem 1rem;border:1px solid #c00;color:#c00;
+                  border-radius:6px;text-decoration:none">Log out</a>
+    </p>
+</main>
+{% endblock %}

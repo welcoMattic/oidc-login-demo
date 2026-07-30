@@ -1,0 +1,26 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}OIDC login demo{% endblock %}
+
+{% block body %}
+<main style="max-width:720px;margin:3rem auto;font-family:system-ui,sans-serif;padding:0 1rem">
+    <h1>Symfony OIDC login demo</h1>
+    <p>Log in with the OpenID Connect provider of your choice. Each provider is a
+    local Docker Identity Provider, wired through Symfony's OIDC Authorization
+    Code Flow authenticator (one firewall per provider).</p>
+
+    <div style="display:grid;gap:1rem;margin-top:2rem">
+        {% for p in providers %}
+            <a href="{{ path('app_' ~ p.key) }}"
+               style="display:flex;justify-content:space-between;align-items:center;
+                      padding:1rem 1.25rem;border:1px solid #ccc;border-radius:8px;
+                      text-decoration:none;color:inherit{{ p.ready ? '' : ';opacity:.55' }}">
+                <span style="font-weight:600;font-size:1.1rem">Log in with {{ p.label }}</span>
+                <span style="color:#666;font-size:.9rem">
+                    {%- if p.ready %}demo user: {{ p.user }}{% else %}not provisioned yet{% endif -%}
+                </span>
+            </a>
+        {% endfor %}
+    </div>
+</main>
+{% endblock %}

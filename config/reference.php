@@ -1075,6 +1075,9 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             filter?: scalar|Param|null, // Default: "({uid_key}={user_identifier})"
  *             password_attribute?: scalar|Param|null, // Default: null
  *         },
+ *         oidc?: array{
+ *             enabled?: bool|Param, // Internal marker; the OIDC provider has no configuration options. // Default: true
+ *         },
  *     }>,
  *     firewalls?: array<string, array{ // Default: []
  *         pattern?: scalar|Param|null,
@@ -1153,9 +1156,29 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             failure_forward?: bool|Param, // Default: false
  *             failure_path_parameter?: scalar|Param|null, // Default: "_failure_path"
  *         },
+ *         oidc_login?: array{
+ *             provider?: scalar|Param|null,
+ *             remember_me?: bool|Param, // Deprecated: Setting the "security.firewalls..oidc_login.remember_me.remember_me" configuration option has no effect and is deprecated. It will be removed in Symfony 9.0. // Default: true
+ *             success_handler?: scalar|Param|null,
+ *             failure_handler?: scalar|Param|null,
+ *             check_path?: scalar|Param|null, // The firewall path where the OIDC provider redirects after authentication. Must match a redirect URI registered with the provider. A route is registered automatically for this path. // Default: "/oidc/callback"
+ *             use_forward?: bool|Param, // Default: false
+ *             login_path?: scalar|Param|null, // Default: "/login"
+ *             always_use_default_target_path?: bool|Param, // Default: false
+ *             default_target_path?: scalar|Param|null, // Default: "/"
+ *             target_path_parameter?: scalar|Param|null, // Default: "_target_path"
+ *             use_referer?: bool|Param, // Default: false
+ *             failure_path?: scalar|Param|null, // Default: null
+ *             failure_forward?: bool|Param, // Default: false
+ *             failure_path_parameter?: scalar|Param|null, // Default: "_failure_path"
+ *             provider_uri?: scalar|Param|null, // The OIDC Issuer URL (e.g. "https://accounts.example.com"). Used for .well-known/openid-configuration discovery.
+ *             client_id?: scalar|Param|null, // The OIDC client identifier.
+ *             client_secret?: scalar|Param|null, // The OIDC client secret.
+ *             discovery_cache_ttl?: int|Param, // TTL in seconds for caching the OIDC discovery configuration. // Default: 3600
+ *         },
  *         form_login?: array{
  *             provider?: scalar|Param|null,
- *             remember_me?: bool|Param, // Default: true
+ *             remember_me?: bool|Param, // Deprecated: Setting the "security.firewalls..form_login.remember_me.remember_me" configuration option has no effect and is deprecated. It will be removed in Symfony 9.0. // Default: true
  *             success_handler?: scalar|Param|null,
  *             failure_handler?: scalar|Param|null,
  *             check_path?: scalar|Param|null, // Default: "/login_check"
@@ -1178,7 +1201,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         },
  *         form_login_ldap?: array{
  *             provider?: scalar|Param|null,
- *             remember_me?: bool|Param, // Default: true
+ *             remember_me?: bool|Param, // Deprecated: Setting the "security.firewalls..form_login_ldap.remember_me.remember_me" configuration option has no effect and is deprecated. It will be removed in Symfony 9.0. // Default: true
  *             success_handler?: scalar|Param|null,
  *             failure_handler?: scalar|Param|null,
  *             check_path?: scalar|Param|null, // Default: "/login_check"
@@ -1203,10 +1226,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             query_string?: scalar|Param|null,
  *             search_dn?: scalar|Param|null, // Default: ""
  *             search_password?: scalar|Param|null, // Default: ""
+ *             ldap_users_only?: bool|Param, // Only bind users of class "Symfony\Component\Ldap\Security\LdapUser" against the LDAP server, and leave any other user to the regular password checker. // Default: false
  *         },
  *         json_login?: array{
  *             provider?: scalar|Param|null,
- *             remember_me?: bool|Param, // Default: true
+ *             remember_me?: bool|Param, // Deprecated: Setting the "security.firewalls..json_login.remember_me.remember_me" configuration option has no effect and is deprecated. It will be removed in Symfony 9.0. // Default: true
  *             success_handler?: scalar|Param|null,
  *             failure_handler?: scalar|Param|null,
  *             check_path?: scalar|Param|null, // Default: "/login_check"
@@ -1217,7 +1241,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         },
  *         json_login_ldap?: array{
  *             provider?: scalar|Param|null,
- *             remember_me?: bool|Param, // Default: true
+ *             remember_me?: bool|Param, // Deprecated: Setting the "security.firewalls..json_login_ldap.remember_me.remember_me" configuration option has no effect and is deprecated. It will be removed in Symfony 9.0. // Default: true
  *             success_handler?: scalar|Param|null,
  *             failure_handler?: scalar|Param|null,
  *             check_path?: scalar|Param|null, // Default: "/login_check"
@@ -1230,10 +1254,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             query_string?: scalar|Param|null,
  *             search_dn?: scalar|Param|null, // Default: ""
  *             search_password?: scalar|Param|null, // Default: ""
+ *             ldap_users_only?: bool|Param, // Only bind users of class "Symfony\Component\Ldap\Security\LdapUser" against the LDAP server, and leave any other user to the regular password checker. // Default: false
  *         },
  *         access_token?: array{
  *             provider?: scalar|Param|null,
- *             remember_me?: bool|Param, // Default: true
+ *             remember_me?: bool|Param, // Deprecated: Setting the "security.firewalls..access_token.remember_me.remember_me" configuration option has no effect and is deprecated. It will be removed in Symfony 9.0. // Default: true
  *             success_handler?: scalar|Param|null,
  *             failure_handler?: scalar|Param|null,
  *             realm?: scalar|Param|null, // Default: null
@@ -1269,6 +1294,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *                         algorithms?: list<scalar|Param|null>,
  *                         keyset?: scalar|Param|null, // JSON-encoded JWKSet used to decrypt the token (must contain a list of valid private keys).
  *                     },
+ *                     allowed_time_drift?: int|Param, // Allowed time drift in seconds for token validation (iat, nbf, exp claims). // Default: 0
  *                 },
  *                 cas?: array{
  *                     validation_url?: scalar|Param|null, // CAS server validation URL
@@ -1290,6 +1316,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             query_string?: scalar|Param|null,
  *             search_dn?: scalar|Param|null, // Default: ""
  *             search_password?: scalar|Param|null, // Default: ""
+ *             ldap_users_only?: bool|Param, // Only bind users of class "Symfony\Component\Ldap\Security\LdapUser" against the LDAP server, and leave any other user to the regular password checker. // Default: false
  *         },
  *         remember_me?: array{
  *             secret?: scalar|Param|null, // Default: "%kernel.secret%"

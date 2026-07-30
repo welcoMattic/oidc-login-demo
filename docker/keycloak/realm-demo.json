@@ -1,0 +1,48 @@
+{
+    "realm": "demo",
+    "enabled": true,
+    "sslRequired": "none",
+    "loginTheme": "keycloak",
+    "clients": [
+        {
+            "clientId": "symfony-demo",
+            "name": "Symfony OIDC demo",
+            "enabled": true,
+            "protocol": "openid-connect",
+            "publicClient": false,
+            "clientAuthenticatorType": "client-secret",
+            "secret": "keycloak-demo-secret",
+            "standardFlowEnabled": true,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": false,
+            "redirectUris": [
+                "http://localhost:8001/keycloak/callback"
+            ],
+            "webOrigins": [
+                "http://localhost:8001"
+            ],
+            "attributes": {
+                "pkce.code.challenge.method": "S256",
+                "post.logout.redirect.uris": "http://localhost:8001/*"
+            }
+        }
+    ],
+    "users": [
+        {
+            "username": "alice",
+            "enabled": true,
+            "emailVerified": true,
+            "email": "alice@keycloak.demo",
+            "firstName": "Alice",
+            "lastName": "Keycloak",
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "password",
+                    "temporary": false
+                }
+            ]
+        }
+    ]
+}

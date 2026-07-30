@@ -42,7 +42,8 @@
         "symfony/web-link": "8.2.*",
         "symfony/yaml": "8.2.*",
         "twig/extra-bundle": "^2.12|^3.0",
-        "twig/twig": "^2.12|^3.0"
+        "twig/twig": "^2.12|^3.0",
+        "web-token/jwt-library": "^4.1.7"
     },
     "config": {
         "allow-plugins": {
