@@ -54,9 +54,9 @@ keycloak:
     pattern: ^/keycloak
     provider: oidc
     oidc_login:
-        provider_uri: 'http://localhost:8080/realms/demo'
-        client_id: 'symfony-demo'
-        client_secret: 'keycloak-demo-secret'
+        provider_uri: '%env(OIDC_KEYCLOAK_PROVIDER_URI)%'
+        client_id: '%env(OIDC_KEYCLOAK_CLIENT_ID)%'
+        client_secret: '%env(OIDC_KEYCLOAK_CLIENT_SECRET)%'
         check_path: /keycloak/callback
 ```
 
@@ -75,11 +75,13 @@ for anything that is not a loopback or test host.
 
 Things that were not obvious, and are worth knowing when using the branch:
 
-1. **Env vars cannot be used for the OIDC options.** `provider_uri`, `client_id` and
-   `client_secret` are declared with `cannotBeEmpty()`, and Symfony refuses environment
-   variables on such nodes (*"cannot contain an environment variable when empty values
-   are not allowed by definition"*). Values must be inlined, which is awkward for a
-   client secret. This demo uses throwaway secrets for local IdPs only.
+1. **Env vars were rejected on `provider_uri`.** A node declared `cannotBeEmpty()` next
+   to a validator makes Symfony refuse environment variables outright (*"cannot contain
+   an environment variable when empty values are not allowed by definition and are
+   validated"*). `client_id` and `client_secret` were always fine, having no validator.
+   Fixed upstream on the branch: the HTTPS requirement is now checked at compile time
+   for a literal, and by `OidcDiscovery` at runtime, which also covers env var values.
+   This demo configures all three through `%env()%`.
 2. **The callback route needs a manual import.** The branch ships an
    `OidcLoginRouteLoader` tagged `routing.route_loader`, but no recipe imports it (the
    logout loader is imported by the security-bundle recipe). Without the import added in
@@ -87,7 +89,9 @@ Things that were not obvious, and are worth knowing when using the branch:
 3. **A trailing slash in the issuer broke discovery.** Authentik announces
    `.../application/o/symfony-demo/`; the factory `rtrim()`s the configured issuer, so
    the Discovery §4.3 check could never pass. Fixed upstream in the branch
-   ("Ignore a trailing slash when checking the OIDC issuer").
+   ("Ignore a trailing slash when checking the OIDC issuer"). Note that with an env var
+   the `rtrim()` applies to the unresolved placeholder, so a trailing slash survives into
+   the discovery URL (`...//.well-known/openid-configuration`); Authentik accepts it.
 4. **`failure_path` is worth setting.** A failed login otherwise redirects to `/login`,
    which does not exist in this app.
 5. Only the `openid` scope is requested by the backbone, so UserInfo may return little

@@ -26,9 +26,9 @@ security:
             pattern: ^/keycloak
             provider: oidc
             oidc_login:
-                provider_uri: 'http://localhost:8080/realms/demo'
-                client_id: 'symfony-demo'
-                client_secret: 'keycloak-demo-secret'
+                provider_uri: '%env(OIDC_KEYCLOAK_PROVIDER_URI)%'
+                client_id: '%env(OIDC_KEYCLOAK_CLIENT_ID)%'
+                client_secret: '%env(OIDC_KEYCLOAK_CLIENT_SECRET)%'
                 check_path: /keycloak/callback
                 default_target_path: /keycloak
                 # without this a failed login redirects to /login, which does not exist
@@ -41,9 +41,9 @@ security:
             pattern: ^/authentik
             provider: oidc
             oidc_login:
-                provider_uri: 'http://localhost:9100/application/o/symfony-demo/'
-                client_id: 'authentik-demo-client'
-                client_secret: 'authentik-demo-secret'
+                provider_uri: '%env(OIDC_AUTHENTIK_PROVIDER_URI)%'
+                client_id: '%env(OIDC_AUTHENTIK_CLIENT_ID)%'
+                client_secret: '%env(OIDC_AUTHENTIK_CLIENT_SECRET)%'
                 check_path: /authentik/callback
                 default_target_path: /authentik
                 # without this a failed login redirects to /login, which does not exist
