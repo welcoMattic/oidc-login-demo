@@ -30,16 +30,16 @@ class DemoController extends AbstractController
                 'direct_redirect: true' => 'reaching this page redirected straight to the provider',
             ],
         ],
-        'authentik' => [
-            'label' => 'authentik 2026.5',
-            'credentials' => 'bob / password',
-            'issuer' => 'https://localhost:9443/application/o/symfony-demo/',
-            'admin' => 'http://localhost:9100/if/admin/ (akadmin / admin12345)',
+        'gravitee' => [
+            'label' => 'Gravitee AM 4',
+            'credentials' => 'carol / Gravitee!2026',
+            'issuer' => 'https://localhost:9443/demo/oidc',
+            'admin' => 'http://localhost:8084/ (admin / adminadmin)',
             'options' => [
                 'user_data_source: id_token' => 'the claims below were decoded from the ID token, with no UserInfo request',
                 'user_identifier_claim: sub' => 'the identity is the "sub" claim (the default)',
                 'token_endpoint_auth_method: client_secret_post' => 'the secret went in the request body (the default)',
-                'enable_end_session: true' => 'logging out ends the session at authentik too',
+                'enable_end_session: true' => 'logging out ends the session at Gravitee too',
                 'direct_redirect: true' => 'reaching this page redirected straight to the provider',
             ],
         ],
@@ -74,10 +74,10 @@ class DemoController extends AbstractController
         return $this->profile('keycloak');
     }
 
-    #[Route('/authentik', name: 'app_authentik')]
-    public function authentik(): Response
+    #[Route('/gravitee', name: 'app_gravitee')]
+    public function gravitee(): Response
     {
-        return $this->profile('authentik');
+        return $this->profile('gravitee');
     }
 
     #[Route('/public', name: 'app_public')]

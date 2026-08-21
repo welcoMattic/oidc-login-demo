@@ -1,0 +1,13 @@
+{
+	admin off
+	auto_https disable_redirects
+}
+
+# Serves the Gravitee AM gateway over HTTPS with the demo certificate, on the same
+# host:port the browser and the Symfony backend both use. Gravitee builds the issuer it
+# announces from the forwarded host and scheme, so it advertises
+# https://localhost:9443/demo/oidc here, which is what provider_uri has to match.
+localhost:9443 {
+	tls /certs/idp.crt /certs/idp.key
+	reverse_proxy gravitee_gateway:8092
+}

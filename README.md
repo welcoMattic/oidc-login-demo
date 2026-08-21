@@ -10,9 +10,12 @@ next to the options that produced them.
 
 ## Try it
 
+Ensure to have Symfony source code checked out on the branch reference in [symfony/symfony#64954](https://github.com/symfony/symfony/pull/64954)
+to be able to run the demo locally.
+
 ```bash
 git clone https://github.com/welcoMattic/oidc-login-demo && cd oidc-login-demo
-make start SYMFONY_SRC=/path/to/symfony
+make start SYMFONY_SRC=/path/to/symfony/source/code/itself
 ```
 
 Then open <http://localhost:8001/>, click *Log in with Keycloak* and use
@@ -47,12 +50,12 @@ at `http://localhost:8001/<provider>/callback`.
 
 ## Providers
 
-| Provider | Status | Demo user | Provisioning |
-| --- | --- | --- | --- |
-| Keycloak 26.7 | works out of the box | `alice` / `password` | realm, client and user imported at boot from `docker/keycloak/realm-demo.json` |
-| authentik 2026.5 | works out of the box | `bob` / `password` | provider, application and user from a blueprint, plus `docker/authentik/provision.sh` for the password and one flow fix |
-| Keycloak, as a public client | works out of the box | `alice` / `password` | second client `symfony-demo-public` in the same realm import, seeded with `publicClient: true` |
-| Gravitee AM | **not included** | none | see below, the stack boots but cannot be provisioned |
+| Provider                     | Status               | Demo user            | Provisioning                                                                                                            |
+|------------------------------|----------------------|----------------------|-------------------------------------------------------------------------------------------------------------------------|
+| Keycloak 26.7                | works out of the box | `alice` / `password` | realm, client and user imported at boot from `docker/keycloak/realm-demo.json`                                          |
+| authentik 2026.5             | works out of the box | `bob` / `password`   | provider, application and user from a blueprint, plus `docker/authentik/provision.sh` for the password and one flow fix |
+| Keycloak, as a public client | works out of the box | `alice` / `password` | second client `symfony-demo-public` in the same realm import, seeded with `publicClient: true`                          |
+| Gravitee AM                  | **not included**     | none                 | see below, the stack boots but cannot be provisioned                                                                    |
 
 Neither provider asks you to click through an admin UI. Their admin consoles are there if
 you want to look: Keycloak on <https://localhost:8443/admin/> (`admin` / `admin`),

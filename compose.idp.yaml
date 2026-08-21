@@ -3,20 +3,19 @@
 # Everything is started for you by "make start". To drive Compose directly:
 #
 #   docker compose -f compose.idp.yaml --profile keycloak up -d --wait
-#   docker compose -f compose.idp.yaml --profile authentik up -d --wait
+#   docker compose -f compose.idp.yaml --profile gravitee up -d --wait
 #
 # Two rules shape this file:
 #
 # 1. Every IdP is served over HTTPS. The authenticator requires the token endpoint
-#    announced by the provider to use HTTPS (the ID token signature is not verified,
-#    so the transport is what makes the token trustworthy), which rules out serving a
-#    local IdP over plain HTTP. The certificate comes from docker/generate-certs.sh.
+#    announced by the provider to use HTTPS, since that leg carries the authorization
+#    code and returns the tokens, which rules out serving a local IdP over plain HTTP.
+#    The certificate comes from docker/generate-certs.sh.
 #
 # 2. Every IdP is published on 127.0.0.1 so the browser and the Symfony backend reach
 #    it at the very same host:port: the "issuer" in the discovery document then matches
 #    the configured provider_uri, which the authenticator checks.
 #
-# An unfinished Gravitee AM stack lives in compose.gravitee-wip.yaml.
 
 services:
   # ---------------------------------------------------------------- Keycloak
@@ -44,86 +43,73 @@ services:
       retries: 40
     profiles: ["keycloak", "all"]
 
-  # ---------------------------------------------------------------- Authentik
-  authentik_db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: authentik
-      POSTGRES_USER: authentik
-      POSTGRES_PASSWORD: authentik
+  # ---------------------------------------------------------------- Gravitee AM
+  # Built from the official Compose recipe (docs: Gravitee AM, run in Docker), trimmed
+  # to what the demo needs. Three moving parts: MongoDB, the gateway (the OIDC provider
+  # itself) and the management API (used only by docker/gravitee/provision.sh).
+  gravitee_mongo:
+    # the official recipe pins mongo:4.2, which is EOL and only runs under emulation on
+    # an arm64 host; 7 is supported by AM 4.x and runs natively
+    image: mongo:7
     volumes:
-      - authentik_db_data:/var/lib/postgresql/data
+      - gravitee_mongo_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U authentik -d authentik"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 5s
       timeout: 5s
-      retries: 20
-    profiles: ["authentik", "all"]
+      retries: 30
+    profiles: ["gravitee", "all"]
 
-  authentik_redis:
-    image: redis:alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    profiles: ["authentik", "all"]
+  gravitee_gateway:
+    image: graviteeio/am-gateway:4
+    environment: &gravitee_mongo_uri
+      gravitee_repositories_management_mongodb_uri: mongodb://gravitee_mongo:27017/graviteeam
+      gravitee_repositories_oauth2_mongodb_uri: mongodb://gravitee_mongo:27017/graviteeam
+      gravitee_repositories_gateway_mongodb_uri: mongodb://gravitee_mongo:27017/graviteeam
+    depends_on:
+      gravitee_mongo:
+        condition: service_healthy
+    profiles: ["gravitee", "all"]
 
-  authentik:
-    image: ghcr.io/goauthentik/server:2026.5.6
-    command: server
-    environment: &authentik_env
-      AUTHENTIK_SECRET_KEY: demo-only-not-a-real-secret-key-0123456789
-      AUTHENTIK_POSTGRESQL__HOST: authentik_db
-      AUTHENTIK_POSTGRESQL__USER: authentik
-      AUTHENTIK_POSTGRESQL__NAME: authentik
-      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
-      AUTHENTIK_REDIS__HOST: authentik_redis
-      AUTHENTIK_BOOTSTRAP_PASSWORD: admin12345
-      AUTHENTIK_BOOTSTRAP_TOKEN: demo-bootstrap-token
-      AUTHENTIK_BOOTSTRAP_EMAIL: admin@authentik.demo
-      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
-      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
-    volumes:
-      - ./docker/authentik/blueprints:/blueprints/custom:ro
+  gravitee_management:
+    image: graviteeio/am-management-api:4
+    environment:
+      <<: *gravitee_mongo_uri
+      # AM 4.x requires a data plane, and a domain cannot be created without naming it.
+      # "default" here is the id provision.sh sends as dataPlaneId.
+      gravitee_dataPlanes_0_id: default
+      gravitee_dataPlanes_0_type: mongodb
+      gravitee_dataPlanes_0_mongodb_uri: mongodb://gravitee_mongo:27017/graviteeam
     ports:
-      # Plain HTTP, for the provisioning script only (9000 on the host is commonly taken
-      # by php-fpm). The app never uses this port: it goes through the TLS front below,
-      # and authentik derives the issuer it announces from that request.
-      - "127.0.0.1:9100:9000"
+      # Plain HTTP, for the provisioning script and the management UI only. The app never
+      # touches this port: it goes through the TLS front below.
+      - "127.0.0.1:8093:8093"
     depends_on:
-      authentik_db:
+      gravitee_mongo:
         condition: service_healthy
-      authentik_redis:
-        condition: service_healthy
-    profiles: ["authentik", "all"]
+    profiles: ["gravitee", "all"]
 
-  authentik_worker:
-    image: ghcr.io/goauthentik/server:2026.5.6
-    command: worker
-    environment: *authentik_env
-    volumes:
-      - ./docker/authentik/blueprints:/blueprints/custom:ro
+  gravitee_ui:
+    image: graviteeio/am-management-ui:4
+    environment:
+      # the browser calls the management API directly, so this is a host URL
+      MGMT_API_URL: http://localhost:8093
+    ports:
+      - "127.0.0.1:8084:8080"
     depends_on:
-      authentik_db:
-        condition: service_healthy
-      authentik_redis:
-        condition: service_healthy
-    profiles: ["authentik", "all"]
+      - gravitee_management
+    profiles: ["gravitee", "all"]
 
-  # authentik terminates TLS with a certificate of its own making, which nothing else
-  # trusts; this puts the demo certificate in front of it instead. Keycloak needs no
-  # equivalent: it serves HTTPS itself from the same files.
-  authentik_tls:
+  gravitee_tls:
     image: caddy:2-alpine
     volumes:
-      - ./docker/authentik/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./docker/gravitee/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./docker/certs:/certs:ro
     ports:
       - "127.0.0.1:9443:9443"
     depends_on:
-      - authentik
-    profiles: ["authentik", "all"]
+      - gravitee_gateway
+    profiles: ["gravitee", "all"]
 
 volumes:
-  authentik_db_data:
+  gravitee_mongo_data:
