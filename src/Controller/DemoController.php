@@ -43,6 +43,18 @@ class DemoController extends AbstractController
                 'direct_redirect: true' => 'reaching this page redirected straight to the provider',
             ],
         ],
+        'public' => [
+            'label' => 'Keycloak 26.7, as a public client',
+            'credentials' => 'alice / password',
+            'issuer' => 'https://localhost:8443/realms/demo',
+            'admin' => 'https://localhost:8443/admin/ (admin / admin)',
+            'options' => [
+                'token_endpoint_auth_method: none' => 'no client secret was sent at the token endpoint',
+                'client_secret: not set' => 'this firewall has none, the client_id is the whole identification',
+                'pkce: enabled' => 'the only thing binding the authorization code to this client',
+                'id_token_signature: verified' => 'cannot be turned off for a public client',
+            ],
+        ],
     ];
 
     public function __construct(
@@ -66,6 +78,12 @@ class DemoController extends AbstractController
     public function authentik(): Response
     {
         return $this->profile('authentik');
+    }
+
+    #[Route('/public', name: 'app_public')]
+    public function publicClient(): Response
+    {
+        return $this->profile('public');
     }
 
     private function profile(string $key): Response

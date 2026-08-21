@@ -197,6 +197,8 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         collect_parameter?: scalar|Param|null, // The name of the parameter to use to enable or disable collection on a per request basis. // Default: null
  *         only_exceptions?: bool|Param, // Default: false
  *         only_main_requests?: bool|Param, // Default: false
+ *         excluded_paths?: Param|string|list<scalar|Param|null>,
+ *         excluded_http_codes?: Param|int|string|list<Param|string|list<scalar|Param|null>>,
  *         dsn?: scalar|Param|null, // Default: "file:%kernel.cache_dir%/profiler"
  *         collect_serializer_data?: true|Param, // Deprecated: Setting the "framework.profiler.collect_serializer_data.collect_serializer_data" configuration option is deprecated. It will be removed in version 9.0. // Default: true
  *     },
@@ -604,6 +606,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         headers?: array<string, Param|string|array{ // Default: []
  *             value?: mixed,
  *         }>,
+ *         tracking?: array{ // Default open/click tracking for every message that does not carry an explicit "X-Track" header; null keeps each provider's default. An "X-Track" entry in the "headers" option wins over this one.
+ *             opens?: true|false|Param|null, // Default: null
+ *             clicks?: true|false|Param|null, // Default: null
+ *         },
  *         dkim_signer?: bool|array{ // DKIM signer configuration
  *             enabled?: bool|Param, // Default: false
  *             key?: scalar|Param|null, // Key content, or path to key (in PEM format with the `file://` prefix) // Default: ""
@@ -668,6 +674,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     rate_limiter?: bool|array{ // Rate limiter configuration
  *         enabled?: bool|Param, // Default: false
+ *         builder?: array{ // Configuration for the RateLimiterBuilder service.
+ *             lock_factory?: scalar|Param|null, // The service ID of the lock factory to use with the RateLimiterBuilder. // Default: "auto"
+ *             cache_pool?: scalar|Param|null, // The cache pool to use with RateLimiterBuilder. // Default: "cache.rate_limiter"
+ *             storage_service?: scalar|Param|null, // The service ID of a custom storage implementation, this precedes any configured "cache_pool". // Default: null
+ *         },
  *         limiters?: array<string, array{ // Default: []
  *             lock_factory?: scalar|Param|null, // The service ID of the lock factory used by this limiter (or null to disable locking). // Default: "auto"
  *             cache_pool?: scalar|Param|null, // The cache pool to use for storing the current limiter state. // Default: "cache.rate_limiter"
@@ -1232,6 +1243,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             pkce?: array{
  *                 enabled?: bool|Param, // Enable PKCE (Proof Key for Code Exchange). // Default: true
  *                 method?: scalar|Param|null, // PKCE code challenge method. Must match a service tagged "security.oidc.pkce_method" (builtin: "S256", "plain"). // Default: "S256"
+ *             },
+ *             id_token_signature?: array{
+ *                 required?: bool|Param, // When true (default), the ID token signature is verified against the provider JWKS. Setting it to false decodes the ID token without verifying it, which OIDC Core 1.0, Section 3.1.3.7, item 6 only allows because the token comes from the token endpoint over TLS: it is then only as safe as the TLS verification of the HTTP client used for that request, so never turn it off with a client configured with "verify_peer: false" or "verify_host: false", nor behind a TLS-terminating proxy. // Default: true
+ *                 algorithms?: list<scalar|Param|null>,
+ *                 enforce_key_usage_verification?: bool|Param, // When enabled (default), only keys explicitly designated for signature (via "use":"sig" or a "key_ops" entry containing "sign"/"verify") are accepted. When disabled, keys without any usage designation are also accepted; keys explicitly restricted to encryption are still rejected. // Default: true
  *             },
  *             prompt?: "none"|"login"|"consent"|"select_account"|Param, // OIDC "prompt" parameter. For multi-value combinations, use "authorization_params.prompt" instead.
  *             max_age?: int|Param, // Max seconds since last end-user authentication. Triggers re-authentication when exceeded.

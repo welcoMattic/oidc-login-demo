@@ -20,8 +20,30 @@ cd "$(dirname "$0")/.."
 dir=docker/certs
 mkdir -p "$dir"
 
+# The app trusts the IdPs through framework.http_client.default_options.cafile, which
+# REPLACES the system CA bundle for every outbound request. Pointing it at the demo CA
+# alone would break every other HTTPS call the app makes (importmap:install fetching
+# from a CDN, for one), so what we hand it is the system roots plus the demo CA.
+write_bundle() {
+    system=$(php -r 'echo openssl_get_cert_locations()["default_cert_file"] ?? "";' 2>/dev/null)
+    if [ -z "$system" ] || [ ! -r "$system" ]; then
+        for candidate in /etc/ssl/cert.pem /etc/ssl/certs/ca-certificates.crt \
+                         /etc/pki/tls/certs/ca-bundle.crt /usr/local/etc/openssl/cert.pem; do
+            [ -r "$candidate" ] && system="$candidate" && break
+        done
+    fi
+    if [ -z "$system" ] || [ ! -r "$system" ]; then
+        echo "WARNING: no system CA bundle found, the app will only trust the demo CA"
+        cp "$dir/ca.crt" "$dir/bundle.crt"
+        return
+    fi
+    cat "$system" "$dir/ca.crt" > "$dir/bundle.crt"
+    echo "trust bundle: system roots ($system) plus the demo CA"
+}
+
 if [ -f "$dir/idp.crt" ] && [ -f "$dir/idp.key" ] && [ -f "$dir/ca.crt" ]; then
     echo "certificates already present in $dir (delete the directory to regenerate)"
+    write_bundle
     exit 0
 fi
 
@@ -43,4 +65,6 @@ fi
 # the IdP containers run as a non-root user and read the key through the bind mount
 chmod 644 "$dir/idp.key"
 
-echo "done: $dir/idp.crt, $dir/idp.key, $dir/ca.crt"
+write_bundle
+
+echo "done: $dir/idp.crt, $dir/idp.key, $dir/ca.crt, $dir/bundle.crt"

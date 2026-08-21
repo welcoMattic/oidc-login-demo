@@ -1,14 +1,16 @@
 # The OIDC login authenticator talks to the provider through the "http_client" service:
-# the discovery document, the token endpoint and the UserInfo endpoint all go through it.
+# the discovery document, the token endpoint, the UserInfo endpoint and the JWKS all go
+# through it.
 #
-# The demo Identity Providers are served over HTTPS (the authenticator requires it for
-# the token endpoint, since the ID token signature is not verified) with a certificate
-# generated locally by docker/generate-certs.sh. Pointing "cafile" at that CA is what
-# makes the app trust them, with TLS still fully verified: no verify_peer: false here.
+# The demo Identity Providers are served over HTTPS (the authenticator requires it for the
+# token endpoint, which carries the authorization code and returns the tokens) with a
+# certificate generated locally by docker/generate-certs.sh.
 #
-# Careful, this replaces the system CA bundle for every request the app makes. It is
-# fine here because this demo calls nothing but its own IdPs.
+# "cafile" REPLACES the system CA bundle for every request the app makes, so it is pointed
+# at a bundle holding the system roots plus the demo CA, not at the demo CA alone. TLS
+# stays fully verified, for the IdPs and for the rest of the internet alike: no
+# verify_peer: false anywhere in this demo.
 framework:
     http_client:
         default_options:
-            cafile: '%kernel.project_dir%/docker/certs/ca.crt'
+            cafile: '%kernel.project_dir%/docker/certs/bundle.crt'
