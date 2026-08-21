@@ -114,6 +114,10 @@ st, res = call("PATCH", f"{ENV}/domains/{did}/applications/{app_id}",
                    "responseTypes": ["code"],
                    "redirectUris": [REDIRECT],
                    "tokenEndpointAuthMethod": "client_secret_post",
+                   # RP-Initiated Logout is accepted but ends nothing unless singleSignOut is
+                   # on, and the post logout URI has to be registered like the redirect one
+                   "singleSignOut": True,
+                   "postLogoutRedirectUris": ["http://localhost:8001/"],
                    "scopeSettings": [{"scope": s, "defaultScope": True}
                                      for s in ("openid", "profile", "email")],
                }}}, token=token)

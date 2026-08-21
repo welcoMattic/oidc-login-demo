@@ -69,7 +69,11 @@
     {% endif %}
 
     <div class="actions">
-        <a class="button" href="{{ path('_logout_' ~ firewall) }}">
+        {# data-turbo="false" is not cosmetic: the logout response is a 302 to the provider's
+           end_session_endpoint, on another origin, and Turbo Drive turns the navigation into a
+           fetch it cannot follow. The request never leaves the browser, the session at the
+           provider survives, and the only visible symptom is landing back on the home page. #}
+        <a class="button" data-turbo="false" href="{{ path('_logout_' ~ firewall) }}">
             {{ (provider.end_session ?? false) ? 'Log out here and at ' ~ provider.label : 'Log out locally' }}
         </a>
         <a class="button button-quiet" href="{{ path('app_home') }}">Try another provider</a>

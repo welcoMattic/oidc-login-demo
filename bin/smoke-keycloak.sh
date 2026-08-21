@@ -90,4 +90,20 @@ case "$again" in
     *) echo "FAIL: still authenticated, got '$again'"; exit 1 ;;
 esac
 
+step "9. The provider forgot the session too, not just Symfony"
+# asserting the logout REQUEST is not enough: Turbo Drive once swallowed it whole, so the
+# provider kept its session while every earlier check still passed. What proves it is the
+# provider asking for a password again.
+fresh=$(curl -s -c "$TMP/fresh.jar" -b "$TMP/fresh.jar" -o /dev/null -w '%{redirect_url}' "$APP/keycloak")
+case "$fresh" in
+    https://localhost:8443/realms/demo/protocol/openid-connect/auth*) echo "OK: the app starts a new authorization request" ;;
+    *) { echo "FAIL: unexpected entry point redirect: ${fresh:-<none>}"; exit 1; } ;;
+esac
+curl -s --cacert "$CA" -c "$KCJAR" -b "$KCJAR" -L "$fresh" -o "$TMP/reask.html"
+if grep -qE 'login-actions/authenticate|name="password"' "$TMP/reask.html"; then
+    echo "OK: the provider asks for credentials again, so its own session is gone"
+else
+    { echo "FAIL: the provider signed us straight back in: the end session request had no effect"; exit 1; }
+fi
+
 printf '\nKeycloak: everything checked out.\n'

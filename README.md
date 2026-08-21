@@ -249,6 +249,38 @@ A useful way to tell traps 5 and 6 apart from the rest: try the credentials with
 password grant straight against the token endpoint. If a token comes back, the credential
 and the identity provider are fine and the problem is further along the flow.
 
+### The trap that cost the most: Turbo swallows the logout redirect
+
+RP-Initiated Logout is a **front-channel** redirect: Symfony answers the logout request with
+a `302` to the provider's `end_session_endpoint`, and the browser is what carries it there.
+Turbo Drive, which ships with `symfony/ux-turbo` and is therefore in most new Symfony apps,
+turns link navigations into `fetch` calls. A `fetch` cannot perform that third-party
+navigation, so the request never leaves the browser: you are logged out of Symfony, you land
+back on the home page, and the provider still has your session. Click the login button again
+and it signs you straight in without asking for a password.
+
+The fix is one attribute on the link:
+
+```twig
+<a data-turbo="false" href="{{ path('_logout_' ~ firewall) }}">Log out</a>
+```
+
+Symfony is not at fault, and that was checked rather than assumed: replaying the logout
+request with Turbo's own headers (`Accept: text/vnd.turbo-stream.html`, `X-Turbo-Request-Id`,
+`Sec-Fetch-Mode: cors`) still returns `302` to the `end_session_endpoint` with the
+`id_token_hint`. The `LogoutEvent` fires, the listener runs, the response is correct. What is
+missing is a real browser navigation, and no response header can force a fetch-based client
+to make one.
+
+Two lessons went into the test suite because of this one:
+
+- **Asserting the request is not asserting the effect.** The smoke tests used to check that
+  the logout redirect was built with an `id_token_hint`, which stayed green through this whole
+  bug. They now follow the redirect to the provider and then check that the provider **asks
+  for a password again**, which is the only thing that proves its session is gone.
+- **Building a request is not delivering it.** Two of the three tests read the logout
+  redirect without ever following it, so the provider never heard about the logout at all.
+
 ## Layout
 
 ```

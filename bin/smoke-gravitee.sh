@@ -81,6 +81,16 @@ case "$logout" in
     *) die "unexpected logout redirect: ${logout:-<none>}" ;;
 esac
 case "$logout" in *id_token_hint=*) ok "with an id_token_hint" ;; *) die "no id_token_hint" ;; esac
+case "$logout" in *post_logout_redirect_uri=*) ok "with a post_logout_redirect_uri" ;; *) die "no post_logout_redirect_uri" ;; esac
+
+# building the request is not delivering it: the browser is what carries it to the provider,
+# so the test has to follow it too or the provider never hears about the logout
+curl -s -D "$TMP/end.h" --cacert "$CA" -c "$GJAR" -b "$GJAR" -o /dev/null "$logout"
+back=$(location "$TMP/end.h")
+case "$back" in
+    "$APP/"*) ok "Gravitee sent the browser back to post_logout_redirect_path" ;;
+    *) die "unexpected answer from the end session endpoint: ${back:-<none>}" ;;
+esac
 
 step "7. The session is gone, the flow starts over"
 again=$(curl -s -c "$JAR" -b "$JAR" -o /dev/null -w '%{redirect_url}' "$APP/gravitee")
@@ -88,5 +98,21 @@ case "$again" in
     https://localhost:9443/demo/oauth/authorize*) ok "anonymous again" ;;
     *) die "still authenticated: $again" ;;
 esac
+
+step "8. The provider forgot the session too, not just Symfony"
+# asserting the logout REQUEST is not enough: Turbo Drive once swallowed it entirely, so the
+# provider kept its session while every earlier check still passed. What proves it is the
+# provider asking for a password again.
+fresh=$(curl -s -c "$TMP/fresh.jar" -b "$TMP/fresh.jar" -o /dev/null -w '%{redirect_url}' "$APP/gravitee")
+case "$fresh" in
+    https://localhost:9443/demo/oauth/authorize*) ok "the app starts a new authorization request" ;;
+    *) die "unexpected entry point redirect: ${fresh:-<none>}" ;;
+esac
+curl -s --cacert "$CA" -c "$GJAR" -b "$GJAR" -L "$fresh" -o "$TMP/reask.html"
+if grep -qE 'login-actions/authenticate|name="password"' "$TMP/reask.html"; then
+    ok "the provider asks for credentials again, so its own session is gone"
+else
+    die "the provider signed us straight back in: the end session request had no effect"
+fi
 
 printf '\ngravitee: everything checked out.\n'

@@ -69,11 +69,35 @@ esac
 case "$logout" in *id_token_hint=*) ok "with an id_token_hint, which is what identifies the session" ;; *) die "no id_token_hint" ;; esac
 case "$logout" in *post_logout_redirect_uri=*) ok "with a post_logout_redirect_uri" ;; *) die "no post_logout_redirect_uri" ;; esac
 
+# building the request is not delivering it: the browser is what carries it to the provider,
+# so the test has to follow it too or the provider never hears about the logout
+back=$(curl -s --cacert "$CA" -c "$KCJAR" -b "$KCJAR" -o /dev/null -w '%{redirect_url}' "$logout")
+case "$back" in
+    "$APP/"*) ok "Keycloak sent the browser back to post_logout_redirect_path" ;;
+    *) die "unexpected answer from the end session endpoint: ${back:-<none>}" ;;
+esac
+
 step "7. The session is gone, the flow starts over"
 again=$(curl -s -c "$JAR" -b "$JAR" -o /dev/null -w '%{redirect_url}' "$APP/public")
 case "$again" in
     https://localhost:8443/realms/demo/protocol/openid-connect/auth*) ok "anonymous again" ;;
     *) die "still authenticated: $again" ;;
 esac
+
+step "8. The provider forgot the session too, not just Symfony"
+# asserting the logout REQUEST is not enough: Turbo Drive once swallowed it whole, so the
+# provider kept its session while every earlier check still passed. What proves it is the
+# provider asking for a password again.
+fresh=$(curl -s -c "$TMP/fresh.jar" -b "$TMP/fresh.jar" -o /dev/null -w '%{redirect_url}' "$APP/public")
+case "$fresh" in
+    https://localhost:8443/realms/demo/protocol/openid-connect/auth*) ok "the app starts a new authorization request" ;;
+    *) die "unexpected entry point redirect: ${fresh:-<none>}" ;;
+esac
+curl -s --cacert "$CA" -c "$KCJAR" -b "$KCJAR" -L "$fresh" -o "$TMP/reask.html"
+if grep -qE 'login-actions/authenticate|name="password"' "$TMP/reask.html"; then
+    ok "the provider asks for credentials again, so its own session is gone"
+else
+    die "the provider signed us straight back in: the end session request had no effect"
+fi
 
 printf '\npublic client: everything checked out.\n'
