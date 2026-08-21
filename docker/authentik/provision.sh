@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
-# Sets the demo user's password in Authentik. The blueprint creates the user, the
-# provider and the application, but a password cannot be expressed in a blueprint.
+# Finishes the authentik provisioning: the blueprint creates the user, the provider and
+# the application, but it cannot set a password, and the stock authentication flow needs
+# one binding removed. Run by "make start"; idempotent, so re-running it is harmless.
 #
-# Usage: docker/authentik/provision.sh [base_url] [token]
+# Usage: docker/authentik/provision.sh [api_url] [token]
+#
+# The API is reached over plain HTTP on the port compose publishes for it (9000 on the
+# host is commonly taken by php-fpm). The app itself never uses that port: it goes
+# through the HTTPS front on 9443, which is where the announced issuer comes from.
 set -euo pipefail
 
-BASE="${1:-http://localhost:9000}"
+cd "$(dirname "$0")/../.."
+
+BASE="${1:-http://localhost:9100}"
 TOKEN="${2:-demo-bootstrap-token}"
+ISSUER="https://localhost:9443/application/o/symfony-demo/"
 USERNAME="bob"
 PASSWORD="password"
 
@@ -57,6 +65,7 @@ if [ -n "$fpk" ]; then
         done
 fi
 
-echo "OIDC discovery:"
-curl -s "$BASE/application/o/symfony-demo/.well-known/openid-configuration" \
-    | php -r '$d=json_decode(stream_get_contents(STDIN),true); foreach(["issuer","authorization_endpoint","token_endpoint","userinfo_endpoint"] as $k) { echo "  $k: ".($d[$k] ?? "-")."\n"; }'
+echo "OIDC discovery, as the app sees it (through the HTTPS front):"
+curl -sf --cacert docker/certs/ca.crt "${ISSUER}.well-known/openid-configuration" \
+    | php -r '$d=json_decode(stream_get_contents(STDIN),true); foreach(["issuer","authorization_endpoint","token_endpoint","userinfo_endpoint","end_session_endpoint"] as $k) { echo "  $k: ".($d[$k] ?? "-")."\n"; }' \
+    || echo "  WARNING: $ISSUER did not answer; is the authentik_tls container up?"
