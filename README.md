@@ -53,25 +53,24 @@ at `http://localhost:8001/<provider>/callback`.
 | Provider                     | Status               | Demo user            | Provisioning                                                                                                            |
 |------------------------------|----------------------|----------------------|-------------------------------------------------------------------------------------------------------------------------|
 | Keycloak 26.7                | works out of the box | `alice` / `password` | realm, client and user imported at boot from `docker/keycloak/realm-demo.json`                                          |
-| authentik 2026.5             | works out of the box | `bob` / `password`   | provider, application and user from a blueprint, plus `docker/authentik/provision.sh` for the password and one flow fix |
 | Keycloak, as a public client | works out of the box | `alice` / `password` | second client `symfony-demo-public` in the same realm import, seeded with `publicClient: true`                          |
-| Gravitee AM                  | **not included**     | none                 | see below, the stack boots but cannot be provisioned                                                                    |
+| Gravitee AM 4 | **provisions, login broken** | `carol` / `Gravitee!2026` | domain, application and user created through the management API by `docker/gravitee/provision.sh`; the provider then refuses the login, see below |
 
 Neither provider asks you to click through an admin UI. Their admin consoles are there if
 you want to look: Keycloak on <https://localhost:8443/admin/> (`admin` / `admin`),
-authentik on <http://localhost:9100/if/admin/> (`akadmin` / `admin12345`).
+the Gravitee AM console on <http://localhost:8084/> (`admin` / `adminadmin`).
 
 ## What each option does, and where to see it
 
 | Option | Where | What it shows |
 | --- | --- | --- |
-| `provider_uri`, `client_id`, `client_secret` | keycloak, authentik | the required options, read from `.env` through `%env()%`. `client_secret` is required unless the client is public |
+| `provider_uri`, `client_id`, `client_secret` | keycloak, gravitee | the required options, read from `.env` through `%env()%`. `client_secret` is required unless the client is public |
 | `check_path` | both | the callback path, matching the redirect URI registered with the provider |
 | `scope` | both | `profile` and `email` on top of the mandatory `openid`, which is what makes a name and an email show up |
 | `user_identifier_claim` | keycloak (`email`) | the identity becomes `alice@keycloak.demo` instead of the `sub` UUID |
-| `user_data_source` | keycloak (`userinfo`), authentik (`id_token`) | claims fetched from the UserInfo endpoint, or decoded from the ID token with no extra round trip |
+| `user_data_source` | keycloak (`userinfo`), gravitee (`id_token`) | claims fetched from the UserInfo endpoint, or decoded from the ID token with no extra round trip |
 | `enable_end_session`, `post_logout_redirect_path` | both | logging out ends the session at the provider too, then comes back to `/` |
-| `token_endpoint_auth_method` | keycloak (`client_secret_basic`), authentik (`client_secret_post`), public (`none`) | the secret sent as HTTP Basic credentials, in the request body, or no secret sent at all |
+| `token_endpoint_auth_method` | keycloak (`client_secret_basic`), gravitee (`client_secret_post`), public (`none`) | the secret sent as HTTP Basic credentials, in the request body, or no secret sent at all |
 | `client_secret` omitted | public | a public client identifies itself with `client_id` alone, PKCE does the binding |
 | `id_token_signature.required`, `.algorithms` | keycloak (spelled out), others (default) | the ID token signature checked against the provider JWKS, with an allowlist that never holds `none` |
 | `pkce.enabled`, `pkce.method` | keycloak | the `code_challenge` in the authorization request, and the verifier sent back at the exchange |
@@ -141,8 +140,8 @@ Two reasons, and the first one is not optional:
    `host:port`, because the `issuer` announced in the discovery document is compared with
    the configured `provider_uri`. Publishing on `127.0.0.1` keeps both views identical.
 
-Keycloak serves HTTPS itself. authentik terminates TLS with a certificate of its own
-making, which nothing else trusts, so a small Caddy front (`docker/authentik/Caddyfile`)
+Keycloak serves HTTPS itself. The Gravitee gateway speaks plain HTTP only, so a small
+Caddy front (`docker/gravitee/Caddyfile`)
 presents the demo certificate instead.
 
 ## Findings from building this demo
@@ -164,19 +163,21 @@ Things that were not obvious, and are worth knowing when using the branch:
    variables outright. Fixed on the branch: the HTTPS requirement is checked at compile
    time for a literal value, and by `OidcDiscovery` at runtime, which also covers values
    that only exist then. This demo configures all three required options through `%env()%`.
-5. **A trailing slash in the issuer broke discovery.** authentik announces
-   `.../application/o/symfony-demo/`, and the expected issuer was trimmed. Fixed on the
-   branch, on both sides of the comparison.
+5. **A trailing slash in the issuer broke discovery.** Found with authentik, which is no
+   longer part of this demo: it announces `.../application/o/symfony-demo/`, and the
+   expected issuer was trimmed. Fixed on the branch, on both sides of the comparison, so
+   the finding outlived the provider that surfaced it.
 6. **`failure_path` is worth setting.** A failed login otherwise goes to `login_path`,
    which does not exist in an app like this one.
 7. **`user_identifier_claim` must point at a claim the provider actually returns**, and it
    only returns the ones the requested `scope` covers. `user_identifier_claim: email`
    without `email` in the scope fails the login with a clear message.
 8. **The end of an RP-Initiated Logout is the provider's call, not Symfony's.** The same
-   configuration gives two different endings: Keycloak follows the
+   configuration gave two different endings: Keycloak follows the
    `post_logout_redirect_uri` and the browser lands back on the app, while authentik's
-   stock invalidation flow ends on its own "You've logged out" page, with a link back to
-   the application. Both are logged out; only the last hop differs.
+   stock invalidation flow ended on its own "You've logged out" page, with a link back to
+   the application. Both were logged out; only the last hop differed. Worth knowing before
+   blaming the authenticator for where the browser ends up.
 9. **Public clients need no secret at all.** The `public` firewall shows it:
    `token_endpoint_auth_method: none`, no `client_secret` key, and a Keycloak client seeded
    with `publicClient: true`. PKCE is then the only thing binding the authorization code to
@@ -190,30 +191,51 @@ Things that were not obvious, and are worth knowing when using the branch:
    through the same `http_client`, which is one more reason the trust bundle above has to be
    right.
 
-### Gravitee AM, not included
+### Gravitee AM, provisioned but the login does not go through
 
-The stack boots (`compose.gravitee-wip.yaml`), which took finding that all its
-repositories are wired to the `${ds.mongodb.*}` placeholders: the
-`gravitee_management_mongodb_uri` form found in older guides is **ignored** and silently
-falls back to `localhost:27017`. What is not solved is provisioning it:
-`POST /management/auth/login` with `admin` / `adminadmin` (the password shipped in
-`gravitee.yml`) answers `302 -> ?error`, with and without the XSRF token, and with the
-in-memory provider explicitly enabled. Five approaches failed. It would also need a TLS
-front now. Rather than leave a button that leads nowhere, the provider is out of the demo
-until someone gets past that.
+Everything up to the login works, and is automated. The stack is the official Compose
+recipe trimmed down (`compose.idp.yaml`, profile `gravitee`), and
+`docker/gravitee/provision.sh` creates the security domain, the application and the user
+through the management API. The gateway then serves a correct discovery document over the
+TLS front, announcing `https://localhost:9443/demo/oidc`, with an `end_session_endpoint`
+and `S256` among the challenge methods.
+
+Six traps had to be cleared to get that far, all commented in the provisioning script:
+the admin password is `adminadmin` and not `admin`; AM 4.x refuses a domain without a
+`dataPlaneId`; `localhost` and `http` redirect URIs are rejected until the domain allows
+them; the default password policy is the OWASP one, twelve characters minimum; a user
+needs the identity provider **id** as its `source`, not its name; and the password given
+at creation does not make the user able to log in, `resetPassword` is required.
+
+**What is still blocked:** the provider answers `login_failed / invalid_user` for `carol`.
+This was reproduced in a real browser, not only over curl, so it is not a test-harness
+artifact. Everything visible in MongoDB looks right:
+
+- `password_verify()` matches the BCrypt hash stored in `idp_users_<domain>`, the very
+  collection the domain's `mongo-am-idp` provider queries with `{username: ?}`
+- the AM-side `users` document carries `source = default-idp-<domain>` (the provider id)
+  and an `externalId` pointing at that `idp_users` document
+- restarting the gateway, in case it held a stale view of the domain, changes nothing
+
+So the credential and the linkage are in place and the gateway still refuses. The next
+lead is to create a user through the AM console (`http://localhost:8084/`, `admin` /
+`adminadmin`) and diff the two documents: whatever the console writes that the management
+API does not is the answer. `bin/smoke-gravitee.sh` is written and waiting for that; it is
+deliberately kept out of `make smoke` so the suite stays honest.
 
 ## Layout
 
 ```
 Makefile                                       one command to start everything
-bin/smoke-keycloak.sh, bin/smoke-authentik.py  browserless end-to-end logins
-compose.idp.yaml                               Keycloak and authentik, one Compose profile each
-compose.gravitee-wip.yaml                      the unfinished Gravitee AM stack
-docker/generate-certs.sh                       the certificate the providers are served with
-docker/keycloak/realm-demo.json                Keycloak realm, client and user
-docker/authentik/blueprints/symfony-demo.yaml  authentik provider, application and user
-docker/authentik/provision.sh                  password, flow fix, and a discovery dump
-docker/authentik/Caddyfile                     TLS front for authentik
+bin/smoke-keycloak.sh                          browserless end-to-end login
+bin/smoke-public-client.sh                     the same, for the public client
+bin/smoke-gravitee.sh                          the same, for Gravitee (login still broken)
+compose.idp.yaml                               Keycloak and Gravitee, one Compose profile each
+docker/generate-certs.sh                       the certificate the providers are served with,
+                                               plus the trust bundle the app uses
+docker/keycloak/realm-demo.json                Keycloak realm, both clients and the user
+docker/gravitee/Caddyfile                      the TLS front the gateway is served behind
+docker/gravitee/provision.sh                   domain, application and user, with the traps
 config/packages/security.yaml                  one oidc_login firewall per provider
 config/packages/http_client.yaml               trusts the demo certificate
 config/routes/security.yaml                    imports the OIDC callback route loader
