@@ -1,3 +1,238 @@
+/*
+ * The demo's whole stylesheet. Loaded through AssetMapper: assets/app.js imports it, and
+ * base.html.twig calls importmap('app'). Deliberately small and dependency free, so the
+ * interesting part of the demo stays the security configuration and not the front end.
+ */
+
+:root {
+    color-scheme: light dark;
+
+    --bg: #fbfbfc;
+    --surface: #ffffff;
+    --text: #1a1c20;
+    --muted: #62666d;
+    --border: #e2e4e8;
+    --border-strong: #cfd2d8;
+    --accent: #0b6bcb;
+    --accent-contrast: #ffffff;
+    --code-bg: #f2f3f5;
+    --pill-bg: #eaf2fd;
+    --pill-text: #0b4f96;
+
+    --radius: 10px;
+    --gap: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #15171b;
+        --surface: #1c1f24;
+        --text: #e7e9ec;
+        --muted: #9aa0a8;
+        --border: #2c3035;
+        --border-strong: #3c4148;
+        --accent: #6cb2ff;
+        --accent-contrast: #10151c;
+        --code-bg: #23272d;
+        --pill-bg: #1d2c3f;
+        --pill-text: #9ccaff;
+    }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
-    background-color: skyblue;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+}
+
+main {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 4rem;
+}
+
+/* ----------------------------------------------------------------- typography */
+
+h1 {
+    font-size: 1.7rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 .35rem;
+}
+
+h2 {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--muted);
+    margin: 2.5rem 0 .75rem;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid var(--border);
+}
+
+p { margin: 0 0 1rem; }
+p.lead { color: var(--muted); }
+h1 + p.lead { margin-top: 0; font-size: 1.02rem; }
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .86em;
+    background: var(--code-bg);
+    padding: .1em .35em;
+    border-radius: 4px;
+}
+
+/* the value cells and the option list already read as code, no double background there */
+td code, li > code, .pill { background: none; padding: 0; }
+
+/* ----------------------------------------------------------------- provider cards */
+
+.cards { display: grid; gap: .75rem; margin-bottom: .5rem; }
+
+.card {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--gap);
+    padding: 1rem 1.15rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .12s ease, transform .12s ease;
+}
+
+.card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.card strong { font-size: 1.02rem; font-weight: 600; }
+.card small { color: var(--muted); white-space: nowrap; }
+
+/* ----------------------------------------------------------------- tables */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+th, td {
+    text-align: left;
+    padding: .55rem .85rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+tr:last-child th, tr:last-child td { border-bottom: 0; }
+
+th {
+    width: 11rem;
+    font-weight: 500;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+td {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .87rem;
+    word-break: break-word;
+}
+
+/* ----------------------------------------------------------------- option list */
+
+ul.options { list-style: none; margin: 0; padding: 0; }
+
+ul.options li {
+    padding: .6rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+ul.options li:last-child { border-bottom: 0; }
+
+ul.options code {
+    font-size: .87rem;
+    color: var(--text);
+}
+
+ul.options small {
+    display: block;
+    color: var(--muted);
+    margin-top: .15rem;
+}
+
+/* ----------------------------------------------------------------- misc */
+
+.pill {
+    display: inline-block;
+    background: var(--pill-bg);
+    color: var(--pill-text);
+    font-size: .8rem;
+    font-weight: 500;
+    padding: .1rem .5rem;
+    border-radius: 999px;
+}
+
+pre {
+    background: var(--code-bg);
+    color: var(--text);
+    padding: .9rem 1rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: .84rem;
+    line-height: 1.5;
+    margin: 0 0 1rem;
+}
+
+.button {
+    display: inline-block;
+    padding: .5rem 1.1rem;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border: 1px solid transparent;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.button:hover { filter: brightness(1.08); }
+
+.button-quiet {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+
+.back {
+    display: inline-block;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: .9rem;
+    margin-bottom: 1.5rem;
+}
+
+.back:hover { color: var(--accent); }
+
+.actions { margin-top: 2.5rem; display: flex; gap: .6rem; align-items: center; }
+
+@media (max-width: 34rem) {
+    main { padding-top: 2rem; }
+    .card { flex-direction: column; align-items: flex-start; gap: .3rem; }
+    .card small { white-space: normal; }
+    th { width: auto; }
+    table, tbody, tr, th, td { display: block; }
+    th { padding-bottom: 0; border-bottom: 0; }
 }

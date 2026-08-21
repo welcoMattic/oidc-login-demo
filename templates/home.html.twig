@@ -7,12 +7,14 @@
     Code Flow) against real Identity Providers running in Docker. One firewall per provider,
     each one configured differently, so a single login shows the option set at work.</p>
 
-    {% for key, provider in providers %}
-        <a class="card" href="{{ path('app_' ~ key) }}">
-            <strong>Log in with {{ provider.label }}</strong><br>
-            <small>{{ provider.credentials }} &middot; firewall <code>{{ key }}</code></small>
-        </a>
-    {% endfor %}
+    <div class="cards">
+        {% for key, provider in providers %}
+            <a class="card" href="{{ path('app_' ~ key) }}">
+                <strong>Log in with {{ provider.label }}</strong>
+                <small>{{ provider.credentials }} &middot; firewall <code>{{ key }}</code></small>
+            </a>
+        {% endfor %}
+    </div>
 
     <h2>What happens when you click</h2>
     <p class="lead">The page behind the link requires <code>ROLE_USER</code>. The firewall's entry

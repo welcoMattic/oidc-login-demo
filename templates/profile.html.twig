@@ -4,7 +4,7 @@
 
 {% block body %}
 <main>
-    <p><a href="{{ path('app_home') }}">&larr; back to the provider list</a></p>
+    <a class="back" href="{{ path('app_home') }}">&larr; back to the provider list</a>
     <h1>Logged in with {{ provider.label }}</h1>
     <p class="lead">Firewall <code>{{ firewall }}</code>, issuer <code>{{ provider.issuer }}</code></p>
 
@@ -12,7 +12,7 @@
     <table>
         <tr><th>User class</th><td><code>{{ userClass ?? 'none' }}</code></td></tr>
         <tr><th>User identifier</th><td><code>{{ user ? user.userIdentifier : '-' }}</code></td></tr>
-        <tr><th>Roles</th><td><code>{{ user ? user.roles|join(', ') : '-' }}</code></td></tr>
+        <tr><th>Roles</th><td>{% for role in user ? user.roles : [] %}<span class="pill">{{ role }}</span> {% else %}-{% endfor %}</td></tr>
         <tr><th>Access token</th><td>{{ hasAccessToken ? 'received and kept on the security token' : 'none' }}</td></tr>
     </table>
     <p class="lead">Roles are <code>ROLE_USER</code> on purpose: the built-in <code>oidc</code> user
@@ -55,8 +55,9 @@
         <p class="lead">No ID token on the security token.</p>
     {% endif %}
 
-    <p style="margin-top:2rem">
+    <div class="actions">
         <a class="button" href="{{ path('_logout_' ~ firewall) }}">Log out</a>
-    </p>
+        <a class="button button-quiet" href="{{ path('app_home') }}">Try another provider</a>
+    </div>
 </main>
 {% endblock %}
