@@ -1,11 +1,14 @@
 security:
-    # OIDC users are self-contained (all claims come from the provider), so no
-    # password hashing is needed. The hasher config is kept for completeness.
-    password_hashers:
-        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
-
     providers:
-        # Provided by the OIDC login backbone: refreshes the session-stored OidcUser.
+        # Shipped with the OIDC login feature: it builds a self-contained OidcUser from
+        # the claims collected during authentication, and hands it back unchanged when the
+        # session is refreshed. No database is involved anywhere in this demo.
+        #
+        # It deliberately refuses to let the claims define the security identity: the
+        # identifier is the one the authenticator validated, a "roles" claim is dropped,
+        # and roles stay [ROLE_USER]. Mapping claims onto roles is the job of your own
+        # provider, implementing AttributesBasedUserProviderInterface: it receives every
+        # claim as attributes. See the README, "Mapping claims onto roles".
         oidc:
             oidc: ~
 
@@ -14,29 +17,89 @@ security:
             pattern: ^/(_profiler|_wdt|assets|build)/
             security: false
 
-        # One firewall per OIDC provider: the backbone is one-provider-per-firewall,
-        # so each firewall owns a distinct URL prefix + callback + entry point.
+        # An oidc_login firewall talks to exactly one provider, so each IdP gets its own
+        # firewall, URL prefix, callback path and entry point.
         #
-        # NOTE: values are inlined, not '%env(...)%'. The backbone declares
-        # provider_uri/client_id/client_secret with ->cannotBeEmpty(), and Symfony
-        # forbids environment variables on such nodes ("cannot contain an environment
-        # variable when empty values are not allowed by definition"). These are
-        # throwaway secrets for local demo IdPs only.
+        # This first one turns on everything worth seeing. The next one varies the choices,
+        # so the two together cover the whole option set.
         keycloak:
             pattern: ^/keycloak
             provider: oidc
             oidc_login:
+                # The three required options. All of them accept environment variables.
                 provider_uri: '%env(OIDC_KEYCLOAK_PROVIDER_URI)%'
                 client_id: '%env(OIDC_KEYCLOAK_CLIENT_ID)%'
                 client_secret: '%env(OIDC_KEYCLOAK_CLIENT_SECRET)%'
+
+                # Where the provider sends the user back. It must be registered as a
+                # redirect URI with the provider, and the route for it comes from the
+                # loader imported in config/routes/security.yaml.
                 check_path: /keycloak/callback
+
+                # "openid" is always sent; these two are what make the provider return a
+                # name and an email, which the profile page displays.
+                scope: [openid, profile, email]
+
+                # The identity is taken from this claim instead of "sub", so the profile
+                # page shows alice@keycloak.demo as the user identifier while "sub" stays
+                # visible among the claims. The claim must be present, or login fails.
+                user_identifier_claim: email
+
+                # Where the claims are read from. "userinfo" (the default) calls the
+                # UserInfo endpoint; "id_token" decodes them from the ID token instead and
+                # saves that round trip, as the authentik firewall below does.
+                user_data_source: userinfo
+
+                # RP-Initiated Logout: logging out of the app also ends the session at
+                # Keycloak, which then sends the browser back here. The target below is
+                # kept as the fallback for a provider announcing no end_session_endpoint.
+                enable_end_session: true
+                post_logout_redirect_path: /
+
+                # The client secret goes into an HTTP Basic header rather than the request
+                # body (RFC 6749, Section 2.3.1). "client_secret_post" is the default, as
+                # used by the authentik firewall below.
+                token_endpoint_auth_method: client_secret_basic
+
+                # PKCE is on with S256 by default; this only spells it out. "plain" is the
+                # other builtin method, and a service tagged "security.oidc.pkce_method"
+                # can add more.
+                pkce:
+                    enabled: true
+                    method: S256
+
+                # true is the "Log in with Keycloak" behaviour: the entry point redirects
+                # straight to the provider. false redirects to login_path instead, for an
+                # app that wants to show its own login page first.
+                direct_redirect: true
+
+                # Short on purpose: the demo realm is re-imported whenever the container
+                # restarts, and a stale discovery document would survive it. Default: 3600.
+                discovery_cache_ttl: 60
+
+                # A container clock drifting from the host's (after the machine sleeps, for
+                # instance) is enough for the ID token time checks to reject a fresh token.
+                allowed_time_drift: 5
+
+                # Standard firewall options, not specific to OIDC. failure_path matters:
+                # without it a failed login goes to login_path, and this app has no login page.
                 default_target_path: /keycloak
-                # without this a failed login redirects to /login, which does not exist
                 failure_path: /
+                login_path: /
+
+                # The rest of the option set, which this demo has no use for:
+                #
+                # prompt: login              # none, login, consent or select_account
+                # max_age: 300               # re-authenticate if the last login is older
+                # authorization_params:      # anything else to add to the authorization request
+                #     ui_locales: 'fr'
+                #     acr_values: 'urn:mace:incommon:iap:silver'
             logout:
                 path: /keycloak/logout
                 target: /
 
+        # Same feature, different choices: the claims come from the ID token, the secret
+        # goes in the request body, and the user identifier stays the "sub" claim.
         authentik:
             pattern: ^/authentik
             provider: oidc
@@ -45,46 +108,38 @@ security:
                 client_id: '%env(OIDC_AUTHENTIK_CLIENT_ID)%'
                 client_secret: '%env(OIDC_AUTHENTIK_CLIENT_SECRET)%'
                 check_path: /authentik/callback
+                scope: [openid, profile, email]
+
+                # No UserInfo request at all: the claims are the ID token's own.
+                user_data_source: id_token
+
+                # The default, spelled out to contrast with the firewall above.
+                user_identifier_claim: sub
+
+                enable_end_session: true
+                post_logout_redirect_path: /
+
+                direct_redirect: true
+                discovery_cache_ttl: 60
+                allowed_time_drift: 5
+
                 default_target_path: /authentik
-                # without this a failed login redirects to /login, which does not exist
                 failure_path: /
+                login_path: /
             logout:
                 path: /authentik/logout
                 target: /
 
-        gravitee:
-            pattern: ^/gravitee
-            provider: oidc
-            oidc_login:
-                provider_uri: 'http://localhost:8092/demo/oidc'
-                client_id: 'changeme'
-                client_secret: 'changeme'
-                check_path: /gravitee/callback
-                default_target_path: /gravitee
-                # without this a failed login redirects to /login, which does not exist
-                failure_path: /
-            logout:
-                path: /gravitee/logout
-                target: /
-
-        # Public catch-all (chooser page and anything not under a provider prefix).
+        # Public catch-all: the provider chooser and anything outside a provider prefix.
         main:
             lazy: true
             provider: oidc
 
     access_control:
+        # The callback must stay public: the user is anonymous when the provider sends
+        # them back, and the firewall authenticates them from that very request.
         - { path: ^/keycloak/callback, roles: PUBLIC_ACCESS }
         - { path: ^/authentik/callback, roles: PUBLIC_ACCESS }
-        - { path: ^/gravitee/callback, roles: PUBLIC_ACCESS }
+        # Requiring a role here is what triggers the redirect to the provider.
         - { path: ^/keycloak, roles: ROLE_USER }
         - { path: ^/authentik, roles: ROLE_USER }
-        - { path: ^/gravitee, roles: ROLE_USER }
-
-when@test:
-    security:
-        password_hashers:
-            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
-                algorithm: auto
-                cost: 4
-                time_cost: 3
-                memory_cost: 10

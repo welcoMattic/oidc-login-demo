@@ -51,6 +51,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     shared?: bool,
  *     lazy?: bool|string,
  *     public?: bool,
+ *     factory?: CallbackType,
  *     properties?: array<string, mixed>,
  *     configurator?: CallbackType,
  *     calls?: list<CallType>,
@@ -184,7 +185,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     fragments?: bool|array{ // Fragments configuration
  *         enabled?: bool|Param, // Default: false
- *         hinclude_default_template?: scalar|Param|null, // Default: null
+ *         hinclude_default_template?: scalar|Param|null, // Deprecated: Setting the "framework.fragments.hinclude_default_template.hinclude_default_template" configuration option is deprecated. It will be removed in version 9.0. // Default: null
  *         path?: scalar|Param|null, // Default: "/_fragment"
  *     },
  *     uri_signer?: array{ // URI signer configuration
@@ -300,7 +301,9 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         importmap_path?: scalar|Param|null, // The path of the importmap.php file. // Default: "%kernel.project_dir%/importmap.php"
  *         importmap_polyfill?: scalar|Param|null, // The importmap name that will be used to load the polyfill. Set to false to disable. // Default: "es-module-shims"
  *         importmap_script_attributes?: array<string, scalar|Param|null>,
+ *         importmap_integrity_algorithms?: list<"sha256"|"sha384"|"sha512"|Param>,
  *         vendor_dir?: scalar|Param|null, // The directory to store JavaScript vendors. // Default: "%kernel.project_dir%/assets/vendor"
+ *         minimum_release_age?: int|Param, // Minimum age in seconds a package version must have to be considered when checking for updates (0 disables the check). Enabling it makes update checks download the full npm metadata document, which is larger than the abbreviated one. // Default: 0
  *         precompress?: bool|array{ // Precompress assets with Brotli, Zstandard and gzip.
  *             enabled?: bool|Param, // Default: false
  *             formats?: list<scalar|Param|null>,
@@ -325,7 +328,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         },
  *         providers?: array<string, array{ // Default: []
  *             dsn?: scalar|Param|null,
- *             domains?: list<scalar|Param|null>,
+ *             domains?: array<string, scalar|Param|null>,
  *             locales?: list<scalar|Param|null>,
  *         }>,
  *         globals?: array<string, Param|string|array{ // Default: []
@@ -389,9 +392,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     cache?: array{ // Cache configuration
  *         prefix_seed?: scalar|Param|null, // Used to namespace cache keys when using several apps with the same shared backend. // Default: "_%kernel.project_dir%.%kernel.container_class%"
- *         app?: scalar|Param|null, // App related cache pools configuration. // Default: "cache.adapter.filesystem"
+ *         app?: scalar|Param|null, // App related cache pools configuration. Cannot be combined with "default_provider". // Default: "cache.adapter.filesystem"
  *         system?: scalar|Param|null, // System related cache pools configuration. // Default: "cache.adapter.system"
  *         directory?: scalar|Param|null, // Default: "%kernel.share_dir%/pools/app"
+ *         default_provider?: scalar|Param|null, // DSN of the backend to use for "cache.app"; the adapter is deduced from it. Replaces "app", which cannot be set alongside it.
  *         default_psr6_provider?: scalar|Param|null,
  *         default_redis_provider?: scalar|Param|null, // Default: "redis://localhost"
  *         default_valkey_provider?: scalar|Param|null, // Default: "valkey://localhost"
@@ -423,7 +427,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     lock?: Param|bool|string|array{ // Lock configuration
  *         enabled?: bool|Param, // Default: false
- *         resources?: Param|string|array<string, Param|string|list<scalar|Param|null>>,
+ *         resources?: Param|string|array<string, Param|string|list<mixed>>,
  *     },
  *     semaphore?: Param|bool|string|array{ // Semaphore configuration
  *         enabled?: bool|Param, // Default: false
@@ -453,9 +457,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *                 jitter?: float|Param, // Randomness to apply to the delay (between 0 and 1). // Default: 0.1
  *             },
  *             rate_limiter?: scalar|Param|null, // Rate limiter name to use when processing messages. // Default: null
+ *             priority?: int|Param, // Order in which "messenger:consume --all" consumes this transport, higher comes first. // Default: 0
  *         }>,
  *         failure_transport?: scalar|Param|null, // Transport name to send failed messages to (after all retries have failed). // Default: null
  *         stop_worker_on_signals?: Param|int|string|list<scalar|Param|null>,
+ *         reject_redelivered_messages?: bool|Param, // Whether redeliveries should be rejected and retried through a new message instead of being handled directly. This mostly makes sense for AMQP, which redelivers messages that were neither acknowledged nor rejected. Disabling it avoids losing a message when the retry or the failure transport is unreachable, at the risk of a redelivery loop that blocks the queue. // Default: true
  *         default_bus?: scalar|Param|null, // Default: null
  *         buses?: array<string, array{ // Default: {"messenger.bus.default":{"default_middleware":{"enabled":true,"allow_no_handlers":false,"allow_no_senders":true},"middleware":[]}}
  *             default_middleware?: Param|bool|string|array{
@@ -477,61 +483,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         enabled?: bool|Param, // Default: true
  *         max_host_connections?: int|Param, // The maximum number of connections to a single host.
  *         default_options?: array{
- *             headers?: array<string, mixed>,
  *             vars?: array<string, mixed>,
- *             max_redirects?: int|Param, // The maximum number of redirects to follow.
- *             http_version?: scalar|Param|null, // The default HTTP version, typically 1.1 or 2.0, leave to null for the best version.
- *             resolve?: array<string, scalar|Param|null>,
- *             proxy?: scalar|Param|null, // The URL of the proxy to pass requests through or null for automatic detection.
- *             no_proxy?: scalar|Param|null, // A comma separated list of hosts that do not require a proxy to be reached.
- *             timeout?: float|Param, // The idle timeout, defaults to the "default_socket_timeout" ini parameter.
- *             max_duration?: float|Param, // The maximum execution time for the request+response as a whole.
- *             max_connect_duration?: float|Param, // The maximum duration allowed for DNS + TCP + TLS connection; a value lower than or equal to 0 means unlimited.
- *             bindto?: scalar|Param|null, // A network interface name, IP address, a host name or a UNIX socket to bind to.
- *             verify_peer?: bool|Param, // Indicates if the peer should be verified in a TLS context.
- *             verify_host?: bool|Param, // Indicates if the host should exist as a certificate common name.
- *             cafile?: scalar|Param|null, // A certificate authority file.
- *             capath?: scalar|Param|null, // A directory that contains multiple certificate authority files.
- *             local_cert?: scalar|Param|null, // A PEM formatted certificate file.
- *             local_pk?: scalar|Param|null, // A private key file.
- *             passphrase?: scalar|Param|null, // The passphrase used to encrypt the "local_pk" file.
- *             ciphers?: scalar|Param|null, // A list of TLS ciphers separated by colons, commas or spaces (e.g. "RC3-SHA:TLS13-AES-128-GCM-SHA256"...)
- *             peer_fingerprint?: array{ // Associative array: hashing algorithm => hash(es).
- *                 sha1?: mixed,
- *                 pin-sha256?: mixed,
- *                 md5?: mixed,
- *             },
- *             crypto_method?: scalar|Param|null, // The minimum version of TLS to accept; must be one of STREAM_CRYPTO_METHOD_TLSv*_CLIENT constants.
- *             extra?: array<string, mixed>,
- *             rate_limiter?: scalar|Param|null, // Rate limiter name to use for throttling requests. // Default: null
- *             caching?: bool|array{ // Caching configuration.
- *                 enabled?: bool|Param, // Default: false
- *                 cache_pool?: string|Param, // The taggable cache pool to use for storing the responses. // Default: "cache.http_client"
- *                 shared?: bool|Param, // Indicates whether the cache is shared (public) or private. // Default: true
- *                 max_ttl?: int|Param, // The maximum TTL (in seconds) allowed for cached responses. // Default: 86400
- *             },
- *             retry_failed?: bool|array{
- *                 enabled?: bool|Param, // Default: false
- *                 retry_strategy?: scalar|Param|null, // service id to override the retry strategy. // Default: null
- *                 http_codes?: Param|int|string|array<string, array{ // Default: []
- *                     code?: int|Param,
- *                     methods?: Param|string|list<string|Param>,
- *                 }>,
- *                 max_retries?: int|Param, // Default: 3
- *                 delay?: int|Param, // Time in ms to delay (or the initial value when multiplier is used). // Default: 1000
- *                 multiplier?: float|Param, // If greater than 1, delay will grow exponentially for each retry: delay * (multiple ^ retries). // Default: 2
- *                 max_delay?: int|Param, // Max time in ms that a retry should ever be delayed (0 = infinite). // Default: 0
- *                 jitter?: float|Param, // Randomness in percent (between 0 and 1) to apply to the delay. // Default: 0.1
- *             },
- *         },
- *         mock_response_factory?: scalar|Param|null, // `true` to always return empty 200 responses, or the id of the service to use to generate mock responses - which should be either an invokable or an iterable.
- *         scoped_clients?: array<string, Param|string|array{ // Default: []
- *             scope?: scalar|Param|null, // The regular expression that the request URL must match before adding the other options. When none is provided, the base URI is used instead.
- *             base_uri?: scalar|Param|null, // The URI to resolve relative URLs, following rules in RFC 3985, section 2.
- *             auth_basic?: scalar|Param|null, // An HTTP Basic authentication "username:password".
- *             auth_bearer?: scalar|Param|null, // A token enabling HTTP Bearer authorization.
- *             auth_ntlm?: scalar|Param|null, // A "username:password" pair to use Microsoft NTLM authentication (requires the cURL extension).
- *             query?: array<string, scalar|Param|null>,
  *             headers?: array<string, mixed>,
  *             max_redirects?: int|Param, // The maximum number of redirects to follow.
  *             http_version?: scalar|Param|null, // The default HTTP version, typically 1.1 or 2.0, leave to null for the best version.
@@ -556,7 +508,6 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *                 md5?: mixed,
  *             },
  *             crypto_method?: scalar|Param|null, // The minimum version of TLS to accept; must be one of STREAM_CRYPTO_METHOD_TLSv*_CLIENT constants.
- *             mock_response_factory?: scalar|Param|null, // `true` to always return empty 200 responses, `false` to disable mocking, or the id of the service to use to generate mock responses (invokable or iterable).
  *             extra?: array<string, mixed>,
  *             rate_limiter?: scalar|Param|null, // Rate limiter name to use for throttling requests. // Default: null
  *             caching?: bool|array{ // Caching configuration.
@@ -567,6 +518,63 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             },
  *             retry_failed?: bool|array{
  *                 enabled?: bool|Param, // Default: false
+ *                 base_uris?: Param|string|list<string|Param>,
+ *                 retry_strategy?: scalar|Param|null, // service id to override the retry strategy. // Default: null
+ *                 http_codes?: Param|int|string|array<string, array{ // Default: []
+ *                     code?: int|Param,
+ *                     methods?: Param|string|list<string|Param>,
+ *                 }>,
+ *                 max_retries?: int|Param, // Default: 3
+ *                 delay?: int|Param, // Time in ms to delay (or the initial value when multiplier is used). // Default: 1000
+ *                 multiplier?: float|Param, // If greater than 1, delay will grow exponentially for each retry: delay * (multiple ^ retries). // Default: 2
+ *                 max_delay?: int|Param, // Max time in ms that a retry should ever be delayed (0 = infinite). // Default: 0
+ *                 jitter?: float|Param, // Randomness in percent (between 0 and 1) to apply to the delay. // Default: 0.1
+ *             },
+ *         },
+ *         mock_response_factory?: scalar|Param|null, // `true` to always return empty 200 responses, or the id of the service to use to generate mock responses - which should be either an invokable or an iterable.
+ *         scoped_clients?: array<string, Param|string|array{ // Default: []
+ *             scope?: scalar|Param|null, // The regular expression that the request URL must match before adding the other options. When none is provided, the base URI is used instead.
+ *             base_uri?: scalar|Param|null, // The URI to resolve relative URLs, following rules in RFC 3985, section 2.
+ *             auth_basic?: scalar|Param|null, // An HTTP Basic authentication "username:password".
+ *             auth_bearer?: scalar|Param|null, // A token enabling HTTP Bearer authorization.
+ *             auth_ntlm?: scalar|Param|null, // A "username:password" pair to use Microsoft NTLM authentication (requires the cURL extension).
+ *             query?: array<string, scalar|Param|null>,
+ *             mock_response_factory?: scalar|Param|null, // `true` to always return empty 200 responses, `false` to disable mocking, or the id of the service to use to generate mock responses (invokable or iterable).
+ *             headers?: array<string, mixed>,
+ *             max_redirects?: int|Param, // The maximum number of redirects to follow.
+ *             http_version?: scalar|Param|null, // The default HTTP version, typically 1.1 or 2.0, leave to null for the best version.
+ *             resolve?: array<string, scalar|Param|null>,
+ *             proxy?: scalar|Param|null, // The URL of the proxy to pass requests through or null for automatic detection.
+ *             no_proxy?: scalar|Param|null, // A comma separated list of hosts that do not require a proxy to be reached.
+ *             timeout?: float|Param, // The idle timeout, defaults to the "default_socket_timeout" ini parameter.
+ *             max_duration?: float|Param, // The maximum execution time for the request+response as a whole.
+ *             max_connect_duration?: float|Param, // The maximum duration allowed for DNS + TCP + TLS connection; a value lower than or equal to 0 means unlimited.
+ *             bindto?: scalar|Param|null, // A network interface name, IP address, a host name or a UNIX socket to bind to.
+ *             verify_peer?: bool|Param, // Indicates if the peer should be verified in a TLS context.
+ *             verify_host?: bool|Param, // Indicates if the host should exist as a certificate common name.
+ *             cafile?: scalar|Param|null, // A certificate authority file.
+ *             capath?: scalar|Param|null, // A directory that contains multiple certificate authority files.
+ *             local_cert?: scalar|Param|null, // A PEM formatted certificate file.
+ *             local_pk?: scalar|Param|null, // A private key file.
+ *             passphrase?: scalar|Param|null, // The passphrase used to encrypt the "local_pk" file.
+ *             ciphers?: scalar|Param|null, // A list of TLS ciphers separated by colons, commas or spaces (e.g. "RC3-SHA:TLS13-AES-128-GCM-SHA256"...).
+ *             peer_fingerprint?: array{ // Associative array: hashing algorithm => hash(es).
+ *                 sha1?: mixed,
+ *                 pin-sha256?: mixed,
+ *                 md5?: mixed,
+ *             },
+ *             crypto_method?: scalar|Param|null, // The minimum version of TLS to accept; must be one of STREAM_CRYPTO_METHOD_TLSv*_CLIENT constants.
+ *             extra?: array<string, mixed>,
+ *             rate_limiter?: scalar|Param|null, // Rate limiter name to use for throttling requests. // Default: null
+ *             caching?: bool|array{ // Caching configuration.
+ *                 enabled?: bool|Param, // Default: false
+ *                 cache_pool?: string|Param, // The taggable cache pool to use for storing the responses. // Default: "cache.http_client"
+ *                 shared?: bool|Param, // Indicates whether the cache is shared (public) or private. // Default: true
+ *                 max_ttl?: int|Param, // The maximum TTL (in seconds) allowed for cached responses. // Default: 86400
+ *             },
+ *             retry_failed?: bool|array{
+ *                 enabled?: bool|Param, // Default: false
+ *                 base_uris?: Param|string|list<string|Param>,
  *                 retry_strategy?: scalar|Param|null, // service id to override the retry strategy. // Default: null
  *                 http_codes?: Param|int|string|array<string, array{ // Default: []
  *                     code?: int|Param,
@@ -584,7 +592,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         enabled?: bool|Param, // Default: true
  *         message_bus?: scalar|Param|null, // The message bus to use. Defaults to the default bus if the Messenger component is installed. // Default: null
  *         dsn?: scalar|Param|null, // Default: null
- *         transports?: array<string, scalar|Param|null>,
+ *         transports?: array<string, Param|string|array{ // Default: []
+ *             dsn?: scalar|Param|null,
+ *             rate_limiter?: scalar|Param|null, // Rate limiter name used to limit the number of messages sent through this transport; when the limit is exceeded, sending fails with a RateLimitExceededException. // Default: null
+ *         }>,
  *         envelope?: array{ // Mailer Envelope configuration
  *             sender?: scalar|Param|null,
  *             recipients?: Param|string|list<scalar|Param|null>,
@@ -612,7 +623,29 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         smime_encrypter?: bool|array{ // S/MIME encrypter configuration
  *             enabled?: bool|Param, // Default: false
  *             repository?: scalar|Param|null, // S/MIME certificate repository service. This service shall implement the `Symfony\Component\Mailer\EventListener\SmimeCertificateRepositoryInterface`. // Default: ""
+ *             certificates?: array<string, scalar|Param|null>,
+ *             on_missing_certificate?: "send_unencrypted"|"fail"|"encrypt"|"skip"|Param, // Default behavior when a recipient has no S/MIME certificate: "send_unencrypted" (send the message unencrypted, deprecated since 8.2), "fail" (throw an exception), "encrypt" (encrypt for the recipients that have a certificate, the others receive an unreadable message), "skip" (encrypt for the recipients that have a certificate and drop the others from the envelope; note that "framework.mailer.envelope.recipients" is applied afterwards and overrides that list). Can be overridden per message by setting the "X-SMime-Encrypt" header to one of these values. // Default: "send_unencrypted"
+ *             encrypt_for_sender?: bool|Param, // Also encrypt for the sender, when a certificate is available for its address, so that the sender can read the messages it sent. // Default: false
  *             cipher?: int|Param, // A set of algorithms used to encrypt the message // Default: null
+ *         },
+ *         pgp_signer?: bool|array{ // PGP/MIME signer configuration
+ *             enabled?: bool|Param, // Default: false
+ *             secret_key?: scalar|Param|null, // Path to the secret key (ASCII armored format without the `file://` prefix) // Default: ""
+ *             public_key?: scalar|Param|null, // Path to the public key (ASCII armored format without the `file://` prefix) // Default: null
+ *             passphrase?: scalar|Param|null, // The secret key passphrase // Default: null
+ *             binary?: scalar|Param|null, // Path to the GnuPG binary // Default: "gpg"
+ *             digest_algorithm?: "SHA224"|"SHA256"|"SHA384"|"SHA512"|Param, // The digest algorithm used to sign the message // Default: "SHA512"
+ *         },
+ *         pgp_encrypter?: bool|array{ // PGP/MIME encrypter configuration
+ *             enabled?: bool|Param, // Default: false
+ *             repository?: scalar|Param|null, // Service or class implementing `Symfony\Component\Mailer\EventListener\PgpPublicKeyRepositoryInterface` to provide recipient PGP public keys. // Default: ""
+ *             keys?: array<string, scalar|Param|null>,
+ *             binary?: scalar|Param|null, // Path to the GnuPG binary // Default: "gpg"
+ *             cipher_algorithm?: "AES"|"AES192"|"AES256"|"TWOFISH"|"CAMELLIA128"|"CAMELLIA192"|"CAMELLIA256"|Param, // The cipher algorithm used to encrypt the message // Default: "AES256"
+ *             timeout?: float|Param, // Timeout in seconds for the GPG process (null for no timeout) // Default: 60.0
+ *             hide_recipients?: bool|Param, // Hide every recipient's key ID in the encrypted message (gpg --hidden-recipient). Recipients listed in the Bcc header are always hidden regardless of this option; set it to true to also hide To and Cc recipients. // Default: false
+ *             on_missing_key?: "fail"|"encrypt"|"skip"|Param, // Default behavior when a recipient has no PGP public key: "fail" (throw an exception), "encrypt" (encrypt for the recipients that have a key, the others receive an unreadable message), "skip" (encrypt for the recipients that have a key and drop the others from the envelope; note that "framework.mailer.envelope.recipients" is applied afterwards and overrides that list). The message is never sent unencrypted. Can be overridden per message by setting the "X-Pgp-Encrypt" header to one of these values. // Default: "fail"
+ *             encrypt_for_sender?: bool|Param, // Also encrypt for the sender, when a public key is available for its address, so that the sender can read the messages it sent. // Default: false
  *         },
  *     },
  *     secrets?: bool|array{
@@ -688,8 +721,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         message_bus?: scalar|Param|null, // The message bus to use. // Default: "messenger.default_bus"
  *         event_header_name?: scalar|Param|null, // Default: "Webhook-Event"
  *         id_header_name?: scalar|Param|null, // Default: "Webhook-Id"
+ *         timestamp_header_name?: scalar|Param|null, // Default: "Webhook-Timestamp"
  *         signature_header_name?: scalar|Param|null, // Default: "Webhook-Signature"
  *         signing_algorithm?: scalar|Param|null, // Default: "sha256"
+ *         signature_format?: "legacy"|"standard"|"transitional"|Param, // The signature scheme to emit and to require: "legacy" (default) for Symfony's historical "<algo>=<hex>" over the event name, the id and the body; "standard" for the Standard Webhooks "v1,<base64>" over the id, the timestamp and the body, which moves the event name from the "Webhook-Event" header to the payload's "type" key; "transitional" for both at once, during a migration. // Default: "legacy"
+ *         timestamp_tolerance?: int|Param, // How far, in seconds, an incoming Standard Webhooks timestamp may be from the current time before the request is rejected as a replay. Set to 0 to accept any timestamp. Legacy signatures carry no timestamp and are never bounded. // Default: 300
  *         routing?: array<string, array{ // Default: []
  *             service?: scalar|Param|null,
  *             secret?: scalar|Param|null, // Default: ""
@@ -788,8 +824,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *                 MultipleActiveResultSets?: bool|Param, // Configuring MultipleActiveResultSets for the pdo_sqlsrv driver
  *                 instancename?: scalar|Param|null, // Optional parameter, complete whether to add the INSTANCE_NAME parameter in the connection. It is generally used to connect to an Oracle RAC server to select the name of a particular instance.
  *                 connectstring?: scalar|Param|null, // Complete Easy Connect connection descriptor, see https://docs.oracle.com/database/121/NETAG/naming.htm.When using this option, you will still need to provide the user and password parameters, but the other parameters will no longer be used. Note that when using this parameter, the getHost and getPort methods from Doctrine\DBAL\Connection will no longer function as expected.
+ *                 ...<string, mixed>
  *             }>,
+ *             ...<string, mixed>
  *         }>,
+ *         ...<string, mixed>
  *     },
  *     orm?: array{
  *         default_entity_manager?: scalar|Param|null,
@@ -824,6 +863,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *                         }>,
  *                     }>,
  *                 }>,
+ *                 ...<string, mixed>
  *             },
  *             connection?: scalar|Param|null,
  *             class_metadata_factory_name?: scalar|Param|null, // Default: "Doctrine\\ORM\\Mapping\\ClassMetadataFactory"
@@ -884,10 +924,12 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *                 class?: scalar|Param|null,
  *                 enabled?: bool|Param, // Default: false
  *                 parameters?: array<string, mixed>,
+ *                 ...<string, mixed>
  *             }>,
  *             identity_generation_preferences?: array<string, scalar|Param|null>,
  *         }>,
  *         resolve_target_entities?: array<string, scalar|Param|null>,
+ *         ...<string, mixed>
  *     },
  * }
  * @psalm-type DoctrineMigrationsConfig = array{
@@ -927,6 +969,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         id?: scalar|Param|null,
  *         type?: scalar|Param|null,
  *         value?: mixed,
+ *         ...<string, mixed>
  *     }>,
  *     autoescape_service?: scalar|Param|null, // Default: null
  *     autoescape_service_method?: scalar|Param|null, // Default: null
@@ -1077,6 +1120,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         },
  *         oidc?: array{
  *             enabled?: bool|Param, // Internal marker; the OIDC provider has no configuration options. // Default: true
+ *             ...<string, mixed>
  *         },
  *     }>,
  *     firewalls?: array<string, array{ // Default: []
@@ -1115,6 +1159,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             parameter?: scalar|Param|null, // Default: "_switch_user"
  *             role?: scalar|Param|null, // Default: "ROLE_ALLOWED_TO_SWITCH"
  *             target_route?: scalar|Param|null, // Default: null
+ *             path?: scalar|Param|null, // Restrict user switching to this path (a path or route name). Declaring the route POST-only is up to the application. The parameter is no longer read from the request headers in this mode. // Default: null
+ *             enable_csrf?: bool|Param|null, // Default: null
+ *             csrf_token_id?: scalar|Param|null, // Default: "switch_user"
+ *             csrf_parameter?: scalar|Param|null, // Default: "_csrf_token"
+ *             csrf_token_manager?: scalar|Param|null,
  *         },
  *         required_badges?: list<scalar|Param|null>,
  *         custom_authenticators?: list<scalar|Param|null>,
@@ -1161,9 +1210,11 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             remember_me?: bool|Param, // Deprecated: Setting the "security.firewalls..oidc_login.remember_me.remember_me" configuration option has no effect and is deprecated. It will be removed in Symfony 9.0. // Default: true
  *             success_handler?: scalar|Param|null,
  *             failure_handler?: scalar|Param|null,
- *             check_path?: scalar|Param|null, // The firewall path where the OIDC provider redirects after authentication. Must match a redirect URI registered with the provider. A route is registered automatically for this path. // Default: "/oidc/callback"
+ *             check_path?: scalar|Param|null, // The firewall path where the OIDC provider redirects after authentication. Must match a redirect URI registered with the provider. A route is declared for this path by the "security.authenticator.oidc_login.route_loader" service, which the application must import (see the OIDC login documentation), as it does for the logout routes. // Default: "/oidc/callback"
  *             use_forward?: bool|Param, // Default: false
  *             login_path?: scalar|Param|null, // Default: "/login"
+ *             direct_redirect?: bool|Param, // When true (typical for a "Log in with..." button), the entry point redirects straight to the OIDC provider to start the flow. When false, it redirects to the firewall login_path instead. // Default: false
+ *             user_identifier_claim?: scalar|Param|null, // Default: "sub"
  *             always_use_default_target_path?: bool|Param, // Default: false
  *             default_target_path?: scalar|Param|null, // Default: "/"
  *             target_path_parameter?: scalar|Param|null, // Default: "_target_path"
@@ -1173,8 +1224,21 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             failure_path_parameter?: scalar|Param|null, // Default: "_failure_path"
  *             provider_uri?: scalar|Param|null, // The OIDC Issuer URL (e.g. "https://accounts.example.com"). Used for .well-known/openid-configuration discovery.
  *             client_id?: scalar|Param|null, // The OIDC client identifier.
- *             client_secret?: scalar|Param|null, // The OIDC client secret.
+ *             client_secret?: scalar|Param|null, // The OIDC client secret. Required by every "token_endpoint_auth_method" but "none", which declares a public client. // Default: null
+ *             scope?: list<scalar|Param|null>,
  *             discovery_cache_ttl?: int|Param, // TTL in seconds for caching the OIDC discovery configuration. // Default: 3600
+ *             allowed_time_drift?: int|Param, // Allowed clock skew in seconds when validating ID token time claims. // Default: 0
+ *             token_endpoint_auth_method?: "client_secret_post"|"client_secret_basic"|"none"|Param, // Authentication method for the token endpoint. "none" declares a public client (a SPA, a mobile or a native application), which holds no secret and relies on PKCE to protect the code exchange. // Default: "client_secret_post"
+ *             pkce?: array{
+ *                 enabled?: bool|Param, // Enable PKCE (Proof Key for Code Exchange). // Default: true
+ *                 method?: scalar|Param|null, // PKCE code challenge method. Must match a service tagged "security.oidc.pkce_method" (builtin: "S256", "plain"). // Default: "S256"
+ *             },
+ *             prompt?: "none"|"login"|"consent"|"select_account"|Param, // OIDC "prompt" parameter. For multi-value combinations, use "authorization_params.prompt" instead.
+ *             max_age?: int|Param, // Max seconds since last end-user authentication. Triggers re-authentication when exceeded.
+ *             user_data_source?: "userinfo"|"id_token"|Param, // Source of user claims: "userinfo" fetches from the UserInfo endpoint, "id_token" decodes claims from the ID token. // Default: "userinfo"
+ *             enable_end_session?: bool|Param, // Enable RP-Initiated Logout via the OIDC end_session_endpoint. // Default: false
+ *             post_logout_redirect_path?: scalar|Param|null, // Path or route to redirect to after OIDC logout. // Default: "/"
+ *             authorization_params?: array<string, scalar|Param|null>,
  *         },
  *         form_login?: array{
  *             provider?: scalar|Param|null,
@@ -1375,6 +1439,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *             enabled?: bool|Param|null, // Default: null
  *             date_format?: scalar|Param|null,
  *             remove_used_context_fields?: bool|Param,
+ *             ...<string, mixed>
  *         },
  *         path?: scalar|Param|null, // Default: "%kernel.logs_dir%/%kernel.environment%.log"
  *         file_permission?: scalar|Param|null, // Default: null
@@ -1498,6 +1563,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         channels?: Param|string|array{
  *             type?: scalar|Param|null,
  *             elements?: list<scalar|Param|null>,
+ *             ...<string, mixed>
  *         },
  *     }>,
  * }
@@ -1621,6 +1687,7 @@ namespace Symfony\Component\Routing\Loader\Configurator;
  *     format?: string,
  *     utf8?: bool,
  *     stateless?: bool,
+ *     firewall?: string,
  * }
  * @psalm-type ImportConfig = array{
  *     resource: string,
@@ -1641,6 +1708,7 @@ namespace Symfony\Component\Routing\Loader\Configurator;
  *     format?: string,
  *     utf8?: bool,
  *     stateless?: bool,
+ *     firewall?: string,
  * }
  * @psalm-type AliasConfig = array{
  *     alias: string,

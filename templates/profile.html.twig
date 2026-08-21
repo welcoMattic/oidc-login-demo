@@ -1,42 +1,62 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Logged in via {{ label }}{% endblock %}
+{% block title %}Logged in with {{ provider.label }}{% endblock %}
 
 {% block body %}
-<main style="max-width:720px;margin:3rem auto;font-family:system-ui,sans-serif;padding:0 1rem">
-    <p><a href="{{ path('app_home') }}">&larr; back</a></p>
-    <h1>Logged in via {{ label }} ✅</h1>
+<main>
+    <p><a href="{{ path('app_home') }}">&larr; back to the provider list</a></p>
+    <h1>Logged in with {{ provider.label }}</h1>
+    <p class="lead">Firewall <code>{{ firewall }}</code>, issuer <code>{{ provider.issuer }}</code></p>
 
-    {% if user %}
-        <table style="border-collapse:collapse;margin-top:1.5rem;width:100%">
-            <tbody>
-                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">User identifier</th>
-                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee"><code>{{ user.userIdentifier }}</code></td></tr>
-                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">sub</th>
-                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee"><code>{{ user.sub }}</code></td></tr>
-                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">Roles</th>
-                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee"><code>{{ user.roles|join(', ') }}</code></td></tr>
-                {% if user.email %}
-                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">email</th>
-                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee">{{ user.email }}</td></tr>
-                {% endif %}
-                {% if user.name %}
-                <tr><th style="text-align:left;padding:.4rem .8rem;border-bottom:1px solid #eee">name</th>
-                    <td style="padding:.4rem .8rem;border-bottom:1px solid #eee">{{ user.name }}</td></tr>
-                {% endif %}
-            </tbody>
+    <h2>Who you are now</h2>
+    <table>
+        <tr><th>User class</th><td><code>{{ userClass ?? 'none' }}</code></td></tr>
+        <tr><th>User identifier</th><td><code>{{ user ? user.userIdentifier : '-' }}</code></td></tr>
+        <tr><th>Roles</th><td><code>{{ user ? user.roles|join(', ') : '-' }}</code></td></tr>
+        <tr><th>Access token</th><td>{{ hasAccessToken ? 'received and kept on the security token' : 'none' }}</td></tr>
+    </table>
+    <p class="lead">Roles are <code>ROLE_USER</code> on purpose: the built-in <code>oidc</code> user
+    provider never lets a claim grant a role. See the README to map claims onto roles with your own
+    user provider.</p>
+
+    <h2>What this firewall demonstrates</h2>
+    <ul class="options">
+        {% for option, effect in provider.options %}
+            <li><code>{{ option }}</code><br><small>{{ effect }}</small></li>
+        {% endfor %}
+    </ul>
+
+    <h2>Standard claims on the user</h2>
+    {% if standardClaims is empty %}
+        <p class="lead">None: the provider returned nothing beyond the identifier.</p>
+    {% else %}
+        <table>
+            {% for claim, value in standardClaims %}
+                <tr><th>{{ claim }}</th><td><code>{{ value }}</code></td></tr>
+            {% endfor %}
         </table>
+    {% endif %}
 
-        {% if user.additionalClaims is not empty %}
-            <h2 style="margin-top:2rem;font-size:1rem">Additional claims</h2>
-            <pre style="background:#f6f6f6;padding:1rem;border-radius:6px;overflow:auto">{{ user.additionalClaims|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
-        {% endif %}
+    <h2>Additional claims</h2>
+    {% if additionalClaims %}
+        <pre>{{ additionalClaims }}</pre>
+        <p class="lead">Every claim that matches no standard one is kept here, untouched.</p>
+    {% else %}
+        <p class="lead">None: every claim the provider returned maps onto a standard one.</p>
+    {% endif %}
+
+    <h2>ID token claims</h2>
+    {% if idTokenClaims %}
+        <pre>{{ idTokenClaims }}</pre>
+        <p class="lead">Decoded here for display. At login the authenticator checked its
+        <code>iss</code>, <code>aud</code>, <code>exp</code>, <code>iat</code>, <code>nonce</code>
+        and <code>azp</code>, and that its <code>sub</code> matches the UserInfo one.</p>
+    {% else %}
+        <p class="lead">No ID token on the security token.</p>
     {% endif %}
 
     <p style="margin-top:2rem">
-        <a href="/{{ key }}/logout"
-           style="display:inline-block;padding:.5rem 1rem;border:1px solid #c00;color:#c00;
-                  border-radius:6px;text-decoration:none">Log out</a>
+        <a class="button" href="{{ path('_logout_' ~ firewall) }}">Log out</a>
     </p>
 </main>
 {% endblock %}

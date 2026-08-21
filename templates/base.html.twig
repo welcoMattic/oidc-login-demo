@@ -2,21 +2,58 @@
 <html>
     <head>
         <meta charset="UTF-8">
-        <title>{% block title %}Welcome!{% endblock %}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{% block title %}Symfony OIDC login demo{% endblock %}</title>
         <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><text y=%221.2em%22 font-size=%2296%22>⚫️</text><text y=%221.3em%22 x=%220.2em%22 font-size=%2276%22 fill=%22%23fff%22>sf</text></svg>">
         {% block stylesheets %}
+            <style>
+                :root { color-scheme: light dark; }
+                body {
+                    font-family: system-ui, -apple-system, sans-serif;
+                    line-height: 1.5;
+                    margin: 0;
+                }
+                main { max-width: 46rem; margin: 3rem auto; padding: 0 1.25rem; }
+                h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+                h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; }
+                p.lead { color: #666; margin-top: 0; }
+                a { color: #0b6bcb; }
+                code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: .875em; }
+                .card {
+                    display: block; padding: 1rem 1.25rem; margin-bottom: 1rem;
+                    border: 1px solid #ccc; border-radius: .5rem;
+                    text-decoration: none; color: inherit;
+                }
+                .card:hover { border-color: #0b6bcb; }
+                .card strong { font-size: 1.05rem; }
+                .card small { color: #666; }
+                table { border-collapse: collapse; width: 100%; }
+                th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #e3e3e3; vertical-align: top; }
+                th { width: 12rem; font-weight: 600; }
+                pre {
+                    background: #f5f5f5; color: #111; padding: .8rem 1rem;
+                    border-radius: .4rem; overflow-x: auto; font-size: .85rem;
+                }
+                ul.options { padding-left: 1.1rem; }
+                ul.options li { margin-bottom: .3rem; }
+                .button {
+                    display: inline-block; padding: .5rem 1rem; border-radius: .4rem;
+                    border: 1px solid currentColor; text-decoration: none;
+                }
+                @media (prefers-color-scheme: dark) {
+                    body { background: #16181c; color: #e6e6e6; }
+                    p.lead, .card small { color: #9aa0a6; }
+                    a { color: #6cb2ff; }
+                    .card { border-color: #3c4043; }
+                    th, td { border-bottom-color: #2b2e33; }
+                    pre { background: #23262b; color: #e6e6e6; }
+                }
+            </style>
         {% endblock %}
 
         {% block javascripts %}
             {% block importmap %}{{ importmap('app') }}{% endblock %}
         {% endblock %}
-
-        {% set frankenphp_hot_reload = app.request.server.get('FRANKENPHP_HOT_RELOAD') %}
-        {% if frankenphp_hot_reload %}
-        <meta name="frankenphp-hot-reload:url" content="{{ frankenphp_hot_reload }}">
-        <script src="https://cdn.jsdelivr.net/npm/idiomorph"></script>
-        <script src="https://cdn.jsdelivr.net/npm/frankenphp-hot-reload/+esm" type="module"></script>
-        {% endif %}
     </head>
     <body>
         {% block body %}{% endblock %}
