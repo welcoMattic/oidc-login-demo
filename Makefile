@@ -21,7 +21,7 @@ COMPOSE = docker compose -f compose.idp.yaml
 PROFILES = $(foreach profile,$(IDP),--profile $(profile))
 
 .DEFAULT_GOAL = help
-.PHONY: help start stop restart idp certs link serve check logs clean
+.PHONY: help start stop restart idp certs link serve check smoke logs clean
 
 help: ## List the available targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -72,6 +72,10 @@ check: ## Prove the wiring: container, firewalls and callback routes
 	php bin/console lint:container
 	php bin/console debug:firewall
 	php bin/console debug:router | grep -E 'oidc_login_callback|_logout_'
+
+smoke: ## Log in through every provider without a browser, and check the result
+	bin/smoke-keycloak.sh
+	bin/smoke-authentik.py
 
 logs: ## Follow the Identity Providers' logs
 	$(COMPOSE) --profile all logs -f --tail=50

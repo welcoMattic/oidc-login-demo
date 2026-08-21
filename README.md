@@ -1,155 +1,202 @@
-# Symfony OIDC login demo (multi provider)
+# Symfony OIDC login demo
 
-Demo application for the **OIDC Authorization Code Flow authenticator** proposed in
-[symfony/symfony#64954](https://github.com/symfony/symfony/pull/64954), exercised
-against several real Identity Providers running locally in Docker.
+Demo application for the **OIDC Authorization Code Flow authenticator**
+([symfony/symfony#64954](https://github.com/symfony/symfony/pull/64954)), exercised
+against real Identity Providers running locally in Docker.
 
-The app is wired to the `oidc-login-backbone` branch of a Symfony fork through the
-monorepo `link` script, so the framework code under test is the branch itself.
+Two firewalls, configured differently, cover the whole `oidc_login` option set between
+them. After logging in, the page shows the resulting user, its roles and every claim,
+next to the options that produced them.
 
-## Status
-
-| Provider | Login | Demo user | Notes |
-| --- | --- | --- | --- |
-| Keycloak 26.7 | works | `alice` / `password` | realm imported at boot, nothing else to do |
-| Authentik 2026.5 | works | `bob` / `password` | needs `grant_types` + MFA stage removal, see below |
-| Gravitee AM 4.11 | **not provisioned** | `carol` / `password` (planned) | stack boots, management API login unresolved |
-
-## Requirements
-
-- PHP 8.4+, Composer, [Symfony CLI](https://symfony.com/download)
-- Docker with Compose
-- A checkout of the Symfony fork on branch `oidc-login-backbone`
-
-## Setup
+## Try it
 
 ```bash
-composer install
-
-# Link the framework branch under test into vendor/ (run from the app directory)
-php /path/to/symfony/link .
-
-# Start the IdPs you want (profiles keep memory usage sane)
-docker compose -f compose.idp.yaml --profile keycloak up -d
-docker compose -f compose.idp.yaml --profile authentik up -d
-bash docker/authentik/provision.sh            # sets bob's password, unblocks the flow
-
-symfony server:start -d --no-tls --port=8001
-open http://localhost:8001/
+git clone https://github.com/welcoMattic/oidc-login-demo && cd oidc-login-demo
+make start SYMFONY_SRC=/path/to/symfony
 ```
 
-The homepage is a provider chooser: each button leads to a page protected by that
-provider's firewall, which triggers the OIDC redirect.
+Then open <http://localhost:8001/>, click *Log in with Keycloak* and use
+**alice / password**. That is the whole thing: two commands and a login form.
 
-> The app must be served on **port 8001**: the registered redirect URIs point at
-> `http://localhost:8001/<provider>/callback`.
+`make start` generates a TLS certificate, installs the dependencies, links the framework
+branch into `vendor/`, starts the Identity Providers, provisions them and starts the web
+server. Later runs need no `SYMFONY_SRC`. `make` on its own lists the other targets, and
+`make stop` shuts everything down.
+
+Without a browser, `make smoke` logs in through both providers and checks the result:
+the authorization request and its PKCE challenge, the code exchange, the claims on the
+page and the logout. `make check` lints the container and lists the firewalls and the
+callback routes.
+
+### Requirements
+
+- PHP 8.4+, Composer, [Symfony CLI](https://symfony.com/download), Docker with Compose
+- a checkout of the Symfony fork on the tip of the `oidc_login` stack, currently
+  `oidc-login-tuning`. The demo links to that working tree, so the branch it is on **is**
+  the code under test; `make start SYMFONY_SRC=...` re-links it whenever you switch.
+- optional: [mkcert](https://github.com/FiloSottile/mkcert). With `mkcert -install` run
+  once, the browser trusts the demo certificate and the IdP pages open without a warning.
+  Without mkcert, an `openssl` self-signed certificate is used and the browser asks to
+  accept it once per provider.
+
+The app must stay on port **8001**: the redirect URIs registered with the providers point
+at `http://localhost:8001/<provider>/callback`.
+
+## Providers
+
+| Provider | Status | Demo user | Provisioning |
+| --- | --- | --- | --- |
+| Keycloak 26.7 | works out of the box | `alice` / `password` | realm, client and user imported at boot from `docker/keycloak/realm-demo.json` |
+| authentik 2026.5 | works out of the box | `bob` / `password` | provider, application and user from a blueprint, plus `docker/authentik/provision.sh` for the password and one flow fix |
+| Gravitee AM | **not included** | none | see below, the stack boots but cannot be provisioned |
+
+Neither provider asks you to click through an admin UI. Their admin consoles are there if
+you want to look: Keycloak on <https://localhost:8443/admin/> (`admin` / `admin`),
+authentik on <http://localhost:9100/if/admin/> (`akadmin` / `admin12345`).
+
+## What each option does, and where to see it
+
+| Option | Where | What it shows |
+| --- | --- | --- |
+| `provider_uri`, `client_id`, `client_secret` | both firewalls | the three required options, all read from `.env` through `%env()%` |
+| `check_path` | both | the callback path, matching the redirect URI registered with the provider |
+| `scope` | both | `profile` and `email` on top of the mandatory `openid`, which is what makes a name and an email show up |
+| `user_identifier_claim` | keycloak (`email`) | the identity becomes `alice@keycloak.demo` instead of the `sub` UUID |
+| `user_data_source` | keycloak (`userinfo`), authentik (`id_token`) | claims fetched from the UserInfo endpoint, or decoded from the ID token with no extra round trip |
+| `enable_end_session`, `post_logout_redirect_path` | both | logging out ends the session at the provider too, then comes back to `/` |
+| `token_endpoint_auth_method` | keycloak (`client_secret_basic`), authentik (`client_secret_post`) | the secret sent as HTTP Basic credentials, or in the request body |
+| `pkce.enabled`, `pkce.method` | keycloak | the `code_challenge` in the authorization request, and the verifier sent back at the exchange |
+| `direct_redirect` | both (`true`) | the entry point goes straight to the provider, the "Log in with..." behaviour |
+| `discovery_cache_ttl` | both (60) | short, because these containers re-import their configuration when they restart |
+| `allowed_time_drift` | both (5) | tolerance on the ID token time claims, which a container clock drifting from the host's is enough to break |
+| `prompt`, `max_age`, `authorization_params` | commented in `security.yaml` | the demo has no use for them, but the syntax is there |
 
 ## How it is wired
 
-The backbone authenticator is **one provider per firewall**, so each IdP gets its own
-firewall, URL prefix and callback (`config/packages/security.yaml`):
+One firewall per provider: an `oidc_login` firewall talks to a single provider, so each
+one owns a URL prefix, a callback path and an entry point.
+
+The **callback route must be imported by hand**, in `config/routes/security.yaml`:
 
 ```yaml
-keycloak:
-    pattern: ^/keycloak
-    provider: oidc
-    oidc_login:
-        provider_uri: '%env(OIDC_KEYCLOAK_PROVIDER_URI)%'
-        client_id: '%env(OIDC_KEYCLOAK_CLIENT_ID)%'
-        client_secret: '%env(OIDC_KEYCLOAK_CLIENT_SECRET)%'
-        check_path: /keycloak/callback
+_oidc_login_callbacks:
+    resource: security.authenticator.oidc_login.route_loader
+    type: service
 ```
 
-The `oidc` user provider builds a self-contained `OidcUser` from the provider claims,
-so **no database is involved** in authentication.
+Without it the provider's redirect lands on an unrouted `/<provider>/callback` and gets a
+404: the router runs before the firewall. The feature ships the loader (tagged
+`routing.route_loader`, one route per firewall) but no Flex recipe imports it yet, unlike
+the logout loader right above it in the same file.
 
-### Why the IdPs are published on localhost
+The `oidc` user provider builds a self-contained `OidcUser` from the claims, so **no
+database is involved** anywhere in this demo.
 
-The browser and the Symfony backend must reach each IdP at the **same host:port**: the
-authenticator compares the discovery document's `issuer` with the configured
-`provider_uri`. Publishing on `127.0.0.1` keeps both views identical. Container names
-(`http://keycloak:8080`) would also be rejected by the factory, which requires HTTPS
-for anything that is not a loopback or test host.
+### Mapping claims onto roles
+
+Roles stay `[ROLE_USER]`, by design: the built-in `oidc` provider drops a `roles` claim
+and never lets a claim define the identity, so a provider cannot hand out Symfony roles.
+Mapping them is your own provider's job, and it receives every claim:
+
+```php
+final class MyOidcUserProvider implements AttributesBasedUserProviderInterface
+{
+    public function loadUserByIdentifier(string $identifier, array $attributes = []): UserInterface
+    {
+        $roles = array_map(static fn (string $group) => 'ROLE_'.strtoupper($group), $attributes['groups'] ?? []);
+
+        return new MyUser($identifier, ['ROLE_USER', ...$roles], $attributes);
+    }
+    // ...
+}
+```
+
+Then point the firewall at it with `provider: my_oidc` instead of `provider: oidc`.
+
+### Why the Identity Providers are served over HTTPS
+
+Two reasons, and the first one is not optional:
+
+1. **The authenticator requires the token endpoint announced by the provider to use
+   HTTPS.** The ID token signature is not verified, so the transport is what makes the
+   token trustworthy. `OidcDiscovery::getSecureEndpoint()` exempts loopback hosts for the
+   issuer and the other endpoints, but not for the token endpoint, so an IdP on
+   `http://localhost` fails the code exchange. Every provider here is therefore published
+   on `https://localhost:<port>`, with a certificate generated by
+   `docker/generate-certs.sh` and trusted through `config/packages/http_client.yaml`.
+2. The browser and the Symfony backend must reach a provider at the very same
+   `host:port`, because the `issuer` announced in the discovery document is compared with
+   the configured `provider_uri`. Publishing on `127.0.0.1` keeps both views identical.
+
+Keycloak serves HTTPS itself. authentik terminates TLS with a certificate of its own
+making, which nothing else trusts, so a small Caddy front (`docker/authentik/Caddyfile`)
+presents the demo certificate instead.
 
 ## Findings from building this demo
 
 Things that were not obvious, and are worth knowing when using the branch:
 
-1. **Env vars were rejected on `provider_uri`.** A node declared `cannotBeEmpty()` next
-   to a validator makes Symfony refuse environment variables outright (*"cannot contain
-   an environment variable when empty values are not allowed by definition and are
-   validated"*). `client_id` and `client_secret` were always fine, having no validator.
-   Fixed upstream on the branch: the HTTPS requirement is now checked at compile time
-   for a literal, and by `OidcDiscovery` at runtime, which also covers env var values.
-   This demo configures all three through `%env()%`.
-2. **The callback route needs a manual import.** The branch ships an
-   `OidcLoginRouteLoader` tagged `routing.route_loader`, but no recipe imports it (the
-   logout loader is imported by the security-bundle recipe). Without the import added in
-   `config/routes/security.yaml`, the provider redirect hits an unrouted URL and 404s.
-3. **A trailing slash in the issuer broke discovery.** Authentik announces
-   `.../application/o/symfony-demo/`; the factory `rtrim()`s the configured issuer, so
-   the Discovery §4.3 check could never pass. Fixed upstream in the branch
-   ("Ignore a trailing slash when checking the OIDC issuer"). Note that with an env var
-   the `rtrim()` applies to the unresolved placeholder, so a trailing slash survives into
-   the discovery URL (`...//.well-known/openid-configuration`); Authentik accepts it.
-4. **`failure_path` is worth setting.** A failed login otherwise redirects to `/login`,
-   which does not exist in this app.
-5. Only the `openid` scope is requested by the backbone, so UserInfo may return little
-   more than `sub` (configurable scopes/claims live in follow-up PRs).
-6. Logout is **local only** (the session is cleared); RP-initiated logout against the
-   provider's `end_session_endpoint` is a follow-up PR.
+1. **A local IdP cannot be served over plain HTTP any more**, per the HTTPS rule above.
+   This demo worked over HTTP until the endpoint hardening landed; it now needs TLS on
+   every provider, which is a real cost for anyone trying the feature locally. Either the
+   loopback exemption should extend to the token endpoint for local development, or the
+   documentation should say plainly that a local IdP needs TLS.
+2. **`direct_redirect` defaults to `false`**, and then the entry point redirects to
+   `login_path` (`/login` by default). An app with a "Log in with..." button and no login
+   page of its own gets a 404 until it sets `direct_redirect: true`.
+3. **The callback route needs a manual import**, as described above. The real fix belongs
+   in `symfony/recipes`.
+4. **Environment variables were rejected on `provider_uri`.** A node declared
+   `cannotBeEmpty()` next to a validator makes the Config component refuse environment
+   variables outright. Fixed on the branch: the HTTPS requirement is checked at compile
+   time for a literal value, and by `OidcDiscovery` at runtime, which also covers values
+   that only exist then. This demo configures all three required options through `%env()%`.
+5. **A trailing slash in the issuer broke discovery.** authentik announces
+   `.../application/o/symfony-demo/`, and the expected issuer was trimmed. Fixed on the
+   branch, on both sides of the comparison.
+6. **`failure_path` is worth setting.** A failed login otherwise goes to `login_path`,
+   which does not exist in an app like this one.
+7. **`user_identifier_claim` must point at a claim the provider actually returns**, and it
+   only returns the ones the requested `scope` covers. `user_identifier_claim: email`
+   without `email` in the scope fails the login with a clear message.
+8. **The end of an RP-Initiated Logout is the provider's call, not Symfony's.** The same
+   configuration gives two different endings: Keycloak follows the
+   `post_logout_redirect_uri` and the browser lands back on the app, while authentik's
+   stock invalidation flow ends on its own "You've logged out" page, with a link back to
+   the application. Both are logged out; only the last hop differs.
+9. **A newer layer of the stack adds public clients**, through
+   `token_endpoint_auth_method: none`: no `client_secret`, PKCE made mandatory. It is not
+   configured here because the demo is pinned to the branch that ends at
+   `oidc-login-tuning`, and an unknown enum value would stop the app from booting. On a
+   checkout that includes it, a public-client firewall is just a Keycloak client with
+   `publicClient: true`, the option above and no secret.
 
-## Provider specifics
+### Gravitee AM, not included
 
-### Keycloak
-
-`docker/keycloak/realm-demo.json` is imported at boot (`start-dev --import-realm`):
-realm `demo`, confidential client `symfony-demo`, user `alice`. Because `start-dev`
-uses an ephemeral H2 database, the realm is re-imported on every restart.
-
-### Authentik
-
-`docker/authentik/blueprints/symfony-demo.yaml` provisions the OAuth2 provider, the
-application and the user. Two non-obvious requirements:
-
-- `grant_types` **must be declared explicitly** (`authorization_code`). Recent versions
-  default it to an empty list, and the authorization request is rejected with
-  `invalid_request` / *"Invalid grant_type for provider"*.
-- the stock `default-authentication-flow` binds an **MFA validation stage**, which
-  stalls a password-only login. `docker/authentik/provision.sh` removes that binding
-  and sets the demo user's password (a blueprint cannot express a password).
-
-### Gravitee AM (incomplete)
-
-The stack boots (`mongo` + `am-management-api` + `am-gateway`), which required finding
-that all repositories are wired to the `${ds.mongodb.*}` placeholders: the
-`gravitee_management_mongodb_uri` form documented in older guides is **ignored**, and it
-silently falls back to `localhost:27017`. The working override is:
-
-```yaml
-gravitee_ds_mongodb_host: gravitee_mongo
-gravitee_ds_mongodb_port: "27017"
-gravitee_ds_mongodb_dbname: gravitee-am
-```
-
-What is **not** solved: authenticating against the management API to create the security
-domain, the OIDC application and the user. `POST /management/auth/login` with
-`admin` / `adminadmin` (the password documented in the shipped `gravitee.yml`) answers
-`302 -> /management/auth/login?error`, with or without the XSRF token, and enabling the
-in-memory provider (`gravitee_security_providers_0_enabled`) did not change it. The
-`gravitee` firewall is configured but its provider is not reachable yet.
-
-Note: Gravitee AM is still distributed as **separate images**; there is no all-in-one AM
-image at 4.11.
+The stack boots (`compose.gravitee-wip.yaml`), which took finding that all its
+repositories are wired to the `${ds.mongodb.*}` placeholders: the
+`gravitee_management_mongodb_uri` form found in older guides is **ignored** and silently
+falls back to `localhost:27017`. What is not solved is provisioning it:
+`POST /management/auth/login` with `admin` / `adminadmin` (the password shipped in
+`gravitee.yml`) answers `302 -> ?error`, with and without the XSRF token, and with the
+in-memory provider explicitly enabled. Five approaches failed. It would also need a TLS
+front now. Rather than leave a button that leads nowhere, the provider is out of the demo
+until someone gets past that.
 
 ## Layout
 
 ```
-compose.idp.yaml                             the three IdP stacks, one Compose profile each
-docker/keycloak/realm-demo.json              Keycloak realm, client and user
-docker/authentik/blueprints/symfony-demo.yaml  Authentik provider, application and user
-docker/authentik/provision.sh                password + MFA stage removal
-config/packages/security.yaml                one oidc_login firewall per provider
-config/routes/security.yaml                  imports the OIDC callback route loader
-src/Controller/DemoController.php            chooser + per-provider profile pages
+Makefile                                       one command to start everything
+bin/smoke-keycloak.sh, bin/smoke-authentik.py  browserless end-to-end logins
+compose.idp.yaml                               Keycloak and authentik, one Compose profile each
+compose.gravitee-wip.yaml                      the unfinished Gravitee AM stack
+docker/generate-certs.sh                       the certificate the providers are served with
+docker/keycloak/realm-demo.json                Keycloak realm, client and user
+docker/authentik/blueprints/symfony-demo.yaml  authentik provider, application and user
+docker/authentik/provision.sh                  password, flow fix, and a discovery dump
+docker/authentik/Caddyfile                     TLS front for authentik
+config/packages/security.yaml                  one oidc_login firewall per provider
+config/packages/http_client.yaml               trusts the demo certificate
+config/routes/security.yaml                    imports the OIDC callback route loader
+src/Controller/DemoController.php              provider chooser and per-provider profile page
 ```
