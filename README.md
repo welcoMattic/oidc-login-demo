@@ -69,7 +69,7 @@ the Gravitee AM console on <http://localhost:8084/> (`admin` / `adminadmin`).
 | `scope` | both | `profile` and `email` on top of the mandatory `openid`, which is what makes a name and an email show up |
 | `user_identifier_claim` | keycloak (`email`) | the identity becomes `alice@keycloak.demo` instead of the `sub` UUID |
 | `user_data_source` | keycloak (`userinfo`), gravitee (`id_token`) | claims fetched from the UserInfo endpoint, or decoded from the ID token with no extra round trip |
-| `enable_end_session`, `post_logout_redirect_path` | both | logging out ends the session at the provider too, then comes back to `/` |
+| `enable_end_session`, `post_logout_redirect_path` | all three | the logout button ends the session at the provider too, then comes back to `/`. The profile page says which of the two logouts the button will do, and the public client shows that RP-Initiated Logout needs no client secret: the `id_token_hint` is what identifies the session |
 | `token_endpoint_auth_method` | keycloak (`client_secret_basic`), gravitee (`client_secret_post`), public (`none`) | the secret sent as HTTP Basic credentials, in the request body, or no secret sent at all |
 | `client_secret` omitted | public | a public client identifies itself with `client_id` alone, PKCE does the binding |
 | `id_token_signature.required`, `.algorithms` | keycloak (spelled out), others (default) | the ID token signature checked against the provider JWKS, with an allowlist that never holds `none` |

@@ -55,8 +55,23 @@
         <p class="lead">No ID token on the security token.</p>
     {% endif %}
 
+    <h2>Logging out</h2>
+    {% if provider.end_session ?? false %}
+        <p class="lead">This firewall sets <code>enable_end_session: true</code>, so the button below
+        does an <strong>RP-Initiated Logout</strong>: Symfony clears the session, then sends you to the
+        provider's <code>end_session_endpoint</code> with an <code>id_token_hint</code> and a
+        <code>post_logout_redirect_uri</code>, so the session at
+        {{ provider.label }} ends too. Where you land last is the provider's call.</p>
+    {% else %}
+        <p class="lead">This firewall leaves <code>enable_end_session</code> off, so the button below
+        only clears the Symfony session. You would still be signed in at {{ provider.label }}, and
+        logging in again would not ask for a password.</p>
+    {% endif %}
+
     <div class="actions">
-        <a class="button" href="{{ path('_logout_' ~ firewall) }}">Log out</a>
+        <a class="button" href="{{ path('_logout_' ~ firewall) }}">
+            {{ (provider.end_session ?? false) ? 'Log out here and at ' ~ provider.label : 'Log out locally' }}
+        </a>
         <a class="button button-quiet" href="{{ path('app_home') }}">Try another provider</a>
     </div>
 </main>

@@ -16,6 +16,8 @@ class DemoController extends AbstractController
      */
     private const PROVIDERS = [
         'keycloak' => [
+            // drives the logout button: RP-Initiated when the firewall enables it
+            'end_session' => true,
             'label' => 'Keycloak 26.7',
             'credentials' => 'alice / password',
             'issuer' => 'https://localhost:8443/realms/demo',
@@ -31,6 +33,8 @@ class DemoController extends AbstractController
             ],
         ],
         'gravitee' => [
+            // drives the logout button: RP-Initiated when the firewall enables it
+            'end_session' => true,
             'label' => 'Gravitee AM 4',
             'credentials' => 'carol / Gravitee!2026',
             'issuer' => 'https://localhost:9443/demo/oidc',
@@ -44,6 +48,8 @@ class DemoController extends AbstractController
             ],
         ],
         'public' => [
+            // drives the logout button: RP-Initiated when the firewall enables it
+            'end_session' => true,
             'label' => 'Keycloak 26.7, as a public client',
             'credentials' => 'alice / password',
             'issuer' => 'https://localhost:8443/realms/demo',

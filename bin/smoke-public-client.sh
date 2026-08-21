@@ -60,4 +60,20 @@ grep -q 'OidcUser' "$TMP/profile.html" && ok "the user is an OidcUser" || die "n
 grep -q 'token_endpoint_auth_method: none' "$TMP/profile.html" \
     && ok "the page states the client authenticated with no secret" || die "option not shown"
 
+step "6. Log out: RP-Initiated Logout works without a client secret too"
+logout=$(curl -s -c "$JAR" -b "$JAR" -o /dev/null -w '%{redirect_url}' "$APP/public/logout")
+case "$logout" in
+    https://localhost:8443/realms/demo/protocol/openid-connect/logout*) ok "end_session_endpoint" ;;
+    *) die "unexpected logout redirect: ${logout:-<none>}" ;;
+esac
+case "$logout" in *id_token_hint=*) ok "with an id_token_hint, which is what identifies the session" ;; *) die "no id_token_hint" ;; esac
+case "$logout" in *post_logout_redirect_uri=*) ok "with a post_logout_redirect_uri" ;; *) die "no post_logout_redirect_uri" ;; esac
+
+step "7. The session is gone, the flow starts over"
+again=$(curl -s -c "$JAR" -b "$JAR" -o /dev/null -w '%{redirect_url}' "$APP/public")
+case "$again" in
+    https://localhost:8443/realms/demo/protocol/openid-connect/auth*) ok "anonymous again" ;;
+    *) die "still authenticated: $again" ;;
+esac
+
 printf '\npublic client: everything checked out.\n'
