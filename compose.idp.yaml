@@ -1,34 +1,47 @@
 # OIDC Identity Providers for the demo.
 #
-# Each IdP is behind a Compose profile so they can be started independently
-# (16 GB is enough for one or two at a time, tight for all three):
+# Everything is started for you by "make start". To drive Compose directly:
 #
-#   docker compose -f compose.idp.yaml --profile keycloak up -d
-#   docker compose -f compose.idp.yaml --profile authentik up -d
-#   docker compose -f compose.idp.yaml --profile gravitee up -d
+#   docker compose -f compose.idp.yaml --profile keycloak up -d --wait
+#   docker compose -f compose.idp.yaml --profile authentik up -d --wait
 #
-# All IdPs are published on 127.0.0.1 so the browser AND the Symfony backend
-# reach them at the exact same host:port: the discovery "issuer" then matches
-# the configured provider_uri (mandatory for the OIDC login authenticator).
+# Two rules shape this file:
+#
+# 1. Every IdP is served over HTTPS. The authenticator requires the token endpoint
+#    announced by the provider to use HTTPS (the ID token signature is not verified,
+#    so the transport is what makes the token trustworthy), which rules out serving a
+#    local IdP over plain HTTP. The certificate comes from docker/generate-certs.sh.
+#
+# 2. Every IdP is published on 127.0.0.1 so the browser and the Symfony backend reach
+#    it at the very same host:port: the "issuer" in the discovery document then matches
+#    the configured provider_uri, which the authenticator checks.
+#
+# An unfinished Gravitee AM stack lives in compose.gravitee-wip.yaml.
 
 services:
+  # ---------------------------------------------------------------- Keycloak
   keycloak:
     image: quay.io/keycloak/keycloak:26.7
-    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # HTTP stays enabled inside the container for the healthcheck below; only the
+      # HTTPS port is published, so the announced issuer is always the https one.
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /certs/idp.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /certs/idp.key
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8443:8443"
     volumes:
       - ./docker/keycloak/realm-demo.json:/opt/keycloak/data/import/realm-demo.json:ro
+      - ./docker/certs:/certs:ro
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /realms/demo/.well-known/openid-configuration HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | grep -q issuer"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 30
+      retries: 40
     profiles: ["keycloak", "all"]
 
   # ---------------------------------------------------------------- Authentik
@@ -74,8 +87,9 @@ services:
     volumes:
       - ./docker/authentik/blueprints:/blueprints/custom:ro
     ports:
-      # 9000 on the host is commonly taken by php-fpm; authentik derives its issuer
-      # from the request host, so it announces http://localhost:9100/... here.
+      # Plain HTTP, for the provisioning script only (9000 on the host is commonly taken
+      # by php-fpm). The app never uses this port: it goes through the TLS front below,
+      # and authentik derives the issuer it announces from that request.
       - "127.0.0.1:9100:9000"
     depends_on:
       authentik_db:
@@ -97,52 +111,19 @@ services:
         condition: service_healthy
     profiles: ["authentik", "all"]
 
-  # -------------------------------------------------------------- Gravitee AM
-  # Gravitee Access Management is still split into separate images (gateway +
-  # management API + UI) backed by MongoDB; there is no single all-in-one AM image.
-  # The UI is skipped here: provisioning goes through the management API.
-  gravitee_mongo:
-    image: mongo:7
+  # authentik terminates TLS with a certificate of its own making, which nothing else
+  # trusts; this puts the demo certificate in front of it instead. Keycloak needs no
+  # equivalent: it serves HTTPS itself from the same files.
+  authentik_tls:
+    image: caddy:2-alpine
     volumes:
-      - gravitee_mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-    profiles: ["gravitee", "all"]
-
-  gravitee_am_management:
-    image: graviteeio/am-management-api:4.11.13
-    environment: &gravitee_ds
-      # gravitee.yml wires every repository to the ${ds.mongodb.*} placeholders
-      # (defaulting to localhost), so these are the properties to override. The
-      # gravitee_management_mongodb_uri form found in older guides is ignored here.
-      gravitee_ds_mongodb_host: gravitee_mongo
-      gravitee_ds_mongodb_port: "27017"
-      gravitee_ds_mongodb_dbname: gravitee-am
-      # The shipped config disables the in-memory auth provider, so admin/adminadmin
-      # cannot log into the management API. Enable it to allow API provisioning.
-      gravitee_security_providers_0_enabled: "true"
+      - ./docker/authentik/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./docker/certs:/certs:ro
     ports:
-      - "127.0.0.1:8093:8093"
+      - "127.0.0.1:9443:9443"
     depends_on:
-      gravitee_mongo:
-        condition: service_healthy
-    profiles: ["gravitee", "all"]
-
-  gravitee_am_gateway:
-    image: graviteeio/am-gateway:4.11.13
-    environment:
-      <<: *gravitee_ds
-      gravitee_http_cookie_secure: "false"
-    ports:
-      - "127.0.0.1:8092:8092"
-    depends_on:
-      gravitee_mongo:
-        condition: service_healthy
-    profiles: ["gravitee", "all"]
+      - authentik
+    profiles: ["authentik", "all"]
 
 volumes:
   authentik_db_data:
-  gravitee_mongo_data:
