@@ -121,6 +121,25 @@ final class MyOidcUserProvider implements AttributesBasedUserProviderInterface
 
 Then point the firewall at it with `provider: my_oidc` instead of `provider: oidc`.
 
+### One HTTPS gotcha: HSTS is host-scoped, ports do not matter
+
+Keycloak sends `Strict-Transport-Security: max-age=31536000` by default. HSTS is attached
+to the **host** and ignores the port, so one visit to `https://localhost:8443` makes the
+browser force HTTPS on every other `localhost` port: the app on 8001, the Gravitee console
+on 8084, the management API on 8093. They are plain HTTP servers, so the browser then fails
+with `SSL_ERROR_RX_RECORD_TOO_LONG`.
+
+The realm import disables the header (`browserSecurityHeaders.strictTransportSecurity: ""`).
+If a browser already recorded it, clear it: Chrome on `chrome://net-internals/#hsts`, delete
+`localhost`; Firefox by forgetting the site from the history, or by removing the `localhost`
+lines from `SiteSecurityServiceState.txt` in the profile.
+
+Which port speaks what, since mixing them up is the same trap:
+
+| Plain HTTP | HTTPS |
+| --- | --- |
+| the app on 8001, the Gravitee console on 8084, the Gravitee management API on 8093 | Keycloak on 8443, the Gravitee gateway on 9443 |
+
 ### Why the Identity Providers are served over HTTPS
 
 Two reasons, and the first one is not optional:
