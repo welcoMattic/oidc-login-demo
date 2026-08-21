@@ -36,7 +36,7 @@ help: ## List the available targets
 start: certs vendor/autoload.php link warmup idp serve ## Start everything, then open http://localhost:8001/
 	@echo
 	@echo "  Ready: http://localhost:$(APP_PORT)/"
-	@echo "  Keycloak: alice / password (Gravitee login is still broken, see the README)"
+	@echo "  Keycloak: alice / password, Gravitee: carol / Gravitee!2026"
 	@echo
 
 stop: ## Stop the web server and every container
@@ -102,9 +102,8 @@ check: ## Prove the wiring: container, firewalls and callback routes
 
 smoke: ## Log in through every provider without a browser, and check the result
 	bin/smoke-keycloak.sh
+	bin/smoke-gravitee.sh
 	bin/smoke-public-client.sh
-	# bin/smoke-gravitee.sh is written but not in the list yet: the Gravitee login
-	# itself does not pass, see the Gravitee section of the README
 
 logs: ## Follow the Identity Providers' logs
 	$(COMPOSE) --profile all logs -f --tail=50

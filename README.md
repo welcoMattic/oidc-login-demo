@@ -54,7 +54,7 @@ at `http://localhost:8001/<provider>/callback`.
 |------------------------------|----------------------|----------------------|-------------------------------------------------------------------------------------------------------------------------|
 | Keycloak 26.7                | works out of the box | `alice` / `password` | realm, client and user imported at boot from `docker/keycloak/realm-demo.json`                                          |
 | Keycloak, as a public client | works out of the box | `alice` / `password` | second client `symfony-demo-public` in the same realm import, seeded with `publicClient: true`                          |
-| Gravitee AM 4 | **provisions, login broken** | `carol` / `Gravitee!2026` | domain, application and user created through the management API by `docker/gravitee/provision.sh`; the provider then refuses the login, see below |
+| Gravitee AM 4 | works out of the box | `carol` / `Gravitee!2026` | domain, application and user created through the management API by `docker/gravitee/provision.sh` |
 
 Neither provider asks you to click through an admin UI. Their admin consoles are there if
 you want to look: Keycloak on <https://localhost:8443/admin/> (`admin` / `admin`),
@@ -210,37 +210,44 @@ Things that were not obvious, and are worth knowing when using the branch:
    through the same `http_client`, which is one more reason the trust bundle above has to be
    right.
 
-### Gravitee AM, provisioned but the login does not go through
+### Gravitee AM, and the eight traps it took
 
-Everything up to the login works, and is automated. The stack is the official Compose
-recipe trimmed down (`compose.idp.yaml`, profile `gravitee`), and
-`docker/gravitee/provision.sh` creates the security domain, the application and the user
-through the management API. The gateway then serves a correct discovery document over the
-TLS front, announcing `https://localhost:9443/demo/oidc`, with an `end_session_endpoint`
-and `S256` among the challenge methods.
+Gravitee AM works, and it is provisioned for you: the stack is the official Compose recipe
+trimmed down (`compose.idp.yaml`, profile `gravitee`) and `docker/gravitee/provision.sh`
+creates the security domain, the application and the user through the management API.
 
-Six traps had to be cleared to get that far, all commented in the provisioning script:
-the admin password is `adminadmin` and not `admin`; AM 4.x refuses a domain without a
-`dataPlaneId`; `localhost` and `http` redirect URIs are rejected until the domain allows
-them; the default password policy is the OWASP one, twelve characters minimum; a user
-needs the identity provider **id** as its `source`, not its name; and the password given
-at creation does not make the user able to log in, `resetPassword` is required.
+Getting there took eight findings, every one of them failing at a different point in the
+flow, which is what made them expensive. They are all commented in the provisioning script,
+and they are the reason it exists at all:
 
-**What is still blocked:** the provider answers `login_failed / invalid_user` for `carol`.
-This was reproduced in a real browser, not only over curl, so it is not a test-harness
-artifact. Everything visible in MongoDB looks right:
+1. **The admin password is `adminadmin`**, not `admin`. The BCrypt hash sits in the
+   container's `gravitee.yml` with `Password value: adminadmin` above it. `POST
+   /management/auth/token` with Basic auth returns the token. A `401` on
+   `/management/organizations` means the API is up and you have no token; a `404` means the
+   path is wrong.
+2. **A domain cannot be created without `dataPlaneId`** in AM 4.x: `400 [dataPlaneId: must
+   not be null]`. The value is `default`, declared by `gravitee_dataPlanes_0_id` in the
+   Compose file.
+3. **Redirect URIs on `localhost`, or on plain `http`, are refused** with `400 localhost is
+   forbidden` until the domain allows them explicitly.
+4. **The default password policy is the OWASP one, twelve characters minimum**, so an
+   eleven character password is rejected even with an upper case, a digit and a symbol.
+5. **A user needs the identity provider id as its `source`**, not its display name.
+   Getting it wrong gives `invalid_user` for a user that is plainly there in the console.
+6. **The password given at creation does not make the user able to log in.** It has to be
+   set with `POST /users/{id}/resetPassword` afterwards. Until then the gateway answers
+   `invalid_user`, while the database looks perfectly fine.
+7. **The application allows no scope by default.** This one fails *after* a successful
+   login: the provider bounces back with `Invalid scope(s): openid profile email`, so the
+   authenticator reports a provider error and the user stays anonymous. The scopes have to
+   be declared on the application.
+8. **`tokenEndpointAuthMethod` defaults to `client_secret_basic`.** The `gravitee` firewall
+   here demonstrates `client_secret_post`, so the application is switched to match,
+   otherwise the code exchange fails with `invalid_client`.
 
-- `password_verify()` matches the BCrypt hash stored in `idp_users_<domain>`, the very
-  collection the domain's `mongo-am-idp` provider queries with `{username: ?}`
-- the AM-side `users` document carries `source = default-idp-<domain>` (the provider id)
-  and an `externalId` pointing at that `idp_users` document
-- restarting the gateway, in case it held a stale view of the domain, changes nothing
-
-So the credential and the linkage are in place and the gateway still refuses. The next
-lead is to create a user through the AM console (`http://localhost:8084/`, `admin` /
-`adminadmin`) and diff the two documents: whatever the console writes that the management
-API does not is the answer. `bin/smoke-gravitee.sh` is written and waiting for that; it is
-deliberately kept out of `make smoke` so the suite stays honest.
+A useful way to tell traps 5 and 6 apart from the rest: try the credentials with the
+password grant straight against the token endpoint. If a token comes back, the credential
+and the identity provider are fine and the problem is further along the flow.
 
 ## Layout
 
@@ -248,7 +255,7 @@ deliberately kept out of `make smoke` so the suite stays honest.
 Makefile                                       one command to start everything
 bin/smoke-keycloak.sh                          browserless end-to-end login
 bin/smoke-public-client.sh                     the same, for the public client
-bin/smoke-gravitee.sh                          the same, for Gravitee (login still broken)
+bin/smoke-gravitee.sh                          the same, for Gravitee
 compose.idp.yaml                               Keycloak and Gravitee, one Compose profile each
 docker/generate-certs.sh                       the certificate the providers are served with,
                                                plus the trust bundle the app uses

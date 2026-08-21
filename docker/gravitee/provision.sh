@@ -97,6 +97,30 @@ elif st not in (200, 201):
 else:
     print(f"gravitee: application {CLIENT_ID} created")
 
+# Trap 4: the application AM creates from these few fields is not usable as is. Two of its
+# defaults have to be overridden explicitly, and both fail only later in the flow, which is
+# what makes them expensive to find:
+#  - no scope is allowed, so the authorization request comes back
+#    "Invalid scope(s): openid profile email" AFTER the user has logged in
+#  - tokenEndpointAuthMethod defaults to client_secret_basic, while this demo's firewall
+#    sends the secret in the body, so the code exchange would fail with invalid_client
+st, listing = call("GET", f"{ENV}/domains/{did}/applications", token=token)
+app_id = next((a["id"] for a in items(listing) if a["name"] == CLIENT_ID), None)
+if app_id is None:
+    sys.exit(f"the application {CLIENT_ID} cannot be found after creation: {listing}")
+st, res = call("PATCH", f"{ENV}/domains/{did}/applications/{app_id}",
+               {"settings": {"oauth": {
+                   "grantTypes": ["authorization_code", "refresh_token"],
+                   "responseTypes": ["code"],
+                   "redirectUris": [REDIRECT],
+                   "tokenEndpointAuthMethod": "client_secret_post",
+                   "scopeSettings": [{"scope": s, "defaultScope": True}
+                                     for s in ("openid", "profile", "email")],
+               }}}, token=token)
+if st not in (200, 201):
+    sys.exit(f"configuring the application failed: {st} {res}")
+print("gravitee: application scopes and client_secret_post set")
+
 # Trap 4: the user must carry the IDENTITY PROVIDER ID as its "source". Leaving it out
 # stores the provider's display name instead, and the login flow then answers
 # "invalid_user" for a user that is plainly there in the console.

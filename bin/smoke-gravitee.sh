@@ -40,13 +40,20 @@ xsrf=$(grep -oE 'name="X-XSRF-TOKEN"[^>]*value="[^"]*"' "$TMP/login.html" \
 [ -n "$xsrf" ] && ok "CSRF token found" || die "no X-XSRF-TOKEN on the form"
 
 step "3. POST carol / Gravitee!2026"
-callback=$(curl -s --cacert "$CA" -c "$GJAR" -b "$GJAR" -o /dev/null -w '%{redirect_url}' \
-    -d "username=carol" -d 'password=Gravitee!2026' -d 'client_id=symfony-demo' \
-    -d "X-XSRF-TOKEN=$xsrf" "$action")
+# two things this call gets wrong easily: the CSRF token holds "+" characters, which a
+# plain -d would send as spaces, hence --data-urlencode; and Gravitee answers with a
+# Location header that curl does not always expose as %{redirect_url}, hence -D and grep
+location() { grep -i '^location:' "$1" 2>/dev/null | tail -1 | cut -d' ' -f2- | tr -d '\r' || true; }
+curl -s -D "$TMP/post.h" --cacert "$CA" -c "$GJAR" -b "$GJAR" -o /dev/null \
+    -d "username=carol" --data-urlencode 'password=Gravitee!2026' -d 'client_id=symfony-demo' \
+    --data-urlencode "X-XSRF-TOKEN=$xsrf" "$action"
+callback=$(location "$TMP/post.h")
+case "$callback" in *error_code=*|*error=login_failed*) die "the provider rejected the login: $(echo "$callback" | tr '&' '\n' | grep error_ | tr '\n' ' ')" ;; esac
 # Gravitee may insert one hop of its own before handing the code back
 for _ in 1 2 3; do
     case "$callback" in "$APP/gravitee/callback"*) break ;; "") die "the provider stopped redirecting" ;; esac
-    callback=$(curl -s --cacert "$CA" -c "$GJAR" -b "$GJAR" -o /dev/null -w '%{redirect_url}' "$callback")
+    curl -s -D "$TMP/hop.h" --cacert "$CA" -c "$GJAR" -b "$GJAR" -o /dev/null "$callback"
+    callback=$(location "$TMP/hop.h")
 done
 case "$callback" in
     "$APP/gravitee/callback?"*) ok "sent back to the app callback with a code" ;;
