@@ -196,7 +196,9 @@ Things that were not obvious, and are worth knowing when using the branch:
    `post_logout_redirect_uri` and the browser lands back on the app, while authentik's
    stock invalidation flow ended on its own "You've logged out" page, with a link back to
    the application. Both were logged out; only the last hop differed. Worth knowing before
-   blaming the authenticator for where the browser ends up.
+   blaming the authenticator for where the browser ends up. And landing back on the app
+   proves nothing on its own: see the Turbo section below, where the browser landed there
+   without the provider ever being told.
 9. **Public clients need no secret at all.** The `public` firewall shows it:
    `token_endpoint_auth_method: none`, no `client_secret` key, and a Keycloak client seeded
    with `publicClient: true`. PKCE is then the only thing binding the authorization code to
@@ -216,7 +218,7 @@ Gravitee AM works, and it is provisioned for you: the stack is the official Comp
 trimmed down (`compose.idp.yaml`, profile `gravitee`) and `docker/gravitee/provision.sh`
 creates the security domain, the application and the user through the management API.
 
-Getting there took eight findings, every one of them failing at a different point in the
+Getting there took ten findings, every one of them failing at a different point in the
 flow, which is what made them expensive. They are all commented in the provisioning script,
 and they are the reason it exists at all:
 
@@ -244,6 +246,11 @@ and they are the reason it exists at all:
 8. **`tokenEndpointAuthMethod` defaults to `client_secret_basic`.** The `gravitee` firewall
    here demonstrates `client_secret_post`, so the application is switched to match,
    otherwise the code exchange fails with `invalid_client`.
+9. **`singleSignOut` is off by default**, and without it the `end_session_endpoint` accepts
+   the request, answers a clean redirect, and ends nothing. The provider keeps the session
+   and the next login goes straight through. Nothing in the response says so.
+10. **`postLogoutRedirectUris` has to be registered** on the application, exactly like the
+   redirect URI, or the `post_logout_redirect_uri` you send is not honoured.
 
 A useful way to tell traps 5 and 6 apart from the rest: try the credentials with the
 password grant straight against the token endpoint. If a token comes back, the credential
