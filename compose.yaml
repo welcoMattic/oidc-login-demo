@@ -1,25 +1,36 @@
+# OIDC Identity Provider for the demo.
+#
+# One rule shapes this file: the IdP is served over HTTPS. The authenticator requires
+# the token endpoint announced by the provider to use HTTPS, since that leg carries
+# the authorization code and returns the tokens, which rules out serving a local IdP
+# over plain HTTP. The certificate comes from docker/generate-certs.sh.
+#
+# The provider is published on 127.0.0.1 so the browser and the Symfony backend reach
+# it at the very same host:port: the "issuer" in the discovery document then matches
+# the configured provider_uri, which the authenticator checks.
 
 services:
-###> doctrine/doctrine-bundle ###
-  database:
-    image: postgres:${POSTGRES_VERSION:-16}-alpine
+  # ---------------------------------------------------------------- Keycloak
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7
+    command: ["start-dev", "--import-realm"]
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-app}
-      # You should definitely change the password in production
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
-      POSTGRES_USER: ${POSTGRES_USER:-app}
-    healthcheck:
-      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}"]
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # HTTP stays enabled inside the container for the healthcheck below; only the
+      # HTTPS port is published, so the announced issuer is always the https one.
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /certs/idp.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /certs/idp.key
+    ports:
+      - "127.0.0.1:8443:8443"
     volumes:
-      - database_data:/var/lib/postgresql/data:rw
-      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
-      # - ./docker/db/data:/var/lib/postgresql/data:rw
-###< doctrine/doctrine-bundle ###
-
-volumes:
-###> doctrine/doctrine-bundle ###
-  database_data:
-###< doctrine/doctrine-bundle ###
+      - ./docker/keycloak/realm-demo.json:/opt/keycloak/data/import/realm-demo.json:ro
+      - ./docker/certs:/certs:ro
+      - ./docker/keycloak/themes:/opt/keycloak/themes:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /realms/demo/.well-known/openid-configuration HTTP/1.0\r\n\r\n' >&3 && cat <&3 | grep -q issuer"]
+      interval: 5s
+      timeout: 5s
+      retries: 40

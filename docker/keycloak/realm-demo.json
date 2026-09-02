@@ -2,7 +2,13 @@
   "realm": "demo",
   "enabled": true,
   "sslRequired": "none",
-  "loginTheme": "keycloak",
+  "loginTheme": "demo",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "en",
+    "fr"
+  ],
+  "defaultLocale": "en",
   "clients": [
     {
       "clientId": "symfony-demo",
@@ -11,13 +17,13 @@
       "protocol": "openid-connect",
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "keycloak-demo-secret",
+      "secret": "symfony-demo-secret",
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://localhost:8001/keycloak/callback"
+        "http://localhost:8001/*"
       ],
       "webOrigins": [
         "http://localhost:8001"
@@ -25,7 +31,22 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:8001/*"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-userinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "symfony-demo-public",
@@ -38,7 +59,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://localhost:8001/public/callback"
+        "http://localhost:8001/*"
       ],
       "webOrigins": [
         "http://localhost:8001"
@@ -46,7 +67,98 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:8001/*"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-userinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "symfony-demo-es256",
+      "name": "Symfony OIDC demo (ES256)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "symfony-demo-es256-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8001"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "id.token.signed.response.alg": "ES256",
+        "post.logout.redirect.uris": "http://localhost:8001/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-userinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "symfony-demo-plain",
+      "name": "Symfony OIDC demo (plain PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "symfony-demo-plain-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8001"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8001/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-userinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -54,19 +166,159 @@
       "username": "alice",
       "enabled": true,
       "emailVerified": true,
-      "email": "alice@keycloak.demo",
+      "email": "alice@example.com",
       "firstName": "Alice",
-      "lastName": "Keycloak",
+      "lastName": "Martin",
       "credentials": [
         {
           "type": "password",
-          "value": "password",
+          "value": "alice",
           "temporary": false
         }
-      ]
+      ],
+      "realmRoles": [
+        "admin",
+        "editor"
+      ],
+      "attributes": {},
+      "id": "11111111-1111-4111-8111-111111111111"
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@example.com",
+      "firstName": "Bob",
+      "lastName": "Durand",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "editor"
+      ],
+      "attributes": {},
+      "id": "22222222-2222-4222-8222-222222222222"
     }
   ],
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Administrator role"
+      },
+      {
+        "name": "editor",
+        "description": "Editor role"
+      }
+    ]
+  },
   "browserSecurityHeaders": {
     "strictTransportSecurity": ""
+  },
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "rsa-generated",
+        "providerId": "rsa-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "keySize": [
+            "2048"
+          ],
+          "algorithm": [
+            "RS256"
+          ]
+        }
+      },
+      {
+        "name": "rsa-enc-generated",
+        "providerId": "rsa-enc-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "keySize": [
+            "2048"
+          ],
+          "algorithm": [
+            "RSA-OAEP"
+          ]
+        }
+      },
+      {
+        "name": "hmac-generated-hs512",
+        "providerId": "hmac-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "algorithm": [
+            "HS512"
+          ]
+        }
+      },
+      {
+        "name": "aes-generated",
+        "providerId": "aes-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ]
+        }
+      },
+      {
+        "name": "ecdsa-generated",
+        "providerId": "ecdsa-generated",
+        "subComponents": {},
+        "config": {
+          "priority": [
+            "100"
+          ],
+          "enabled": [
+            "true"
+          ],
+          "active": [
+            "true"
+          ],
+          "ecdsaEllipticCurveKey": [
+            "P-256"
+          ]
+        }
+      }
+    ]
   }
 }

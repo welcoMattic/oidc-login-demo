@@ -4,23 +4,48 @@
 <main>
     <h1>Symfony OIDC login demo</h1>
     <p class="lead">Symfony's <code>oidc_login</code> authenticator (OpenID Connect Authorization
-    Code Flow) against real Identity Providers running in Docker. One firewall per provider,
-    each one configured differently, so a single login shows the option set at work.</p>
+    Code Flow) against a Keycloak 26.7 container. One firewall per scenario, each one
+    configured differently, so a single login shows the option set at work.</p>
 
     <div class="cards">
-        {% for key, provider in providers %}
-            <a class="card" href="{{ path('app_' ~ key) }}">
-                <strong>Log in with {{ provider.label }}</strong>
-                <small>{{ provider.credentials }} &middot; firewall <code>{{ key }}</code></small>
+        {% for firewall, scenario in scenarios %}
+            <a class="card" href="{{ path('_oidc_login_start_' ~ firewall) }}">
+                <div>
+                    <strong>{{ scenario.title }}</strong>
+                    <small>{{ scenario.summary }}</small>
+                </div>
+                <div>
+                    <code>{{ firewall }}</code>
+                </div>
             </a>
         {% endfor %}
     </div>
 
+    <div class="cards">
+        {% for firewall, scenario in scenarios %}
+            <a class="card" href="{{ path('app_account', {firewall: firewall}) }}">
+                <div>
+                    <strong>Open protected page</strong>
+                    <small>{{ scenario.title }}</small>
+                </div>
+                <div>
+                    <code>{{ firewall }}</code>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+
+    {% if error is not null %}
+        <div class="error">
+            <strong>Authentication Error:</strong> {{ error.message }}
+        </div>
+    {% endif %}
+
     <h2>What happens when you click</h2>
     <p class="lead">The page behind the link requires <code>ROLE_USER</code>. The firewall's entry
     point sends you to the provider with a <code>state</code>, a <code>nonce</code> and a PKCE
-    challenge, the provider sends you back to <code>/&lt;provider&gt;/callback</code>, and the
-    authenticator exchanges the code for tokens before building the user from the claims. The next
-    page shows what came out of it.</p>
+    challenge, the provider sends you back to <code>/&lt;firewall&gt;/callback</code>, and the
+    authenticator exchanges the code for tokens before building the user from the claims. The
+    account page shows what came out of it.</p>
 </main>
 {% endblock %}
