@@ -16,7 +16,7 @@
                 <span class="pill">{{ user.preferredUsername ?? user.sub ?? user.userIdentifier }}</span>
             {% endif %}
             <a class="button" href="{{ path('_logout_' ~ firewall) }}">Log out</a>
-            <span class="small text-muted">(ends the Keycloak session through the app's RP-Initiated Logout listener)</span>
+            <span class="small text-muted">(also ends the Keycloak session: enable_end_session)</span>
         </div>
     </div>
 
@@ -280,8 +280,37 @@
                     </div>
                 {% endif %}
 
-                {# Step 5: User claims from UserInfo #}
-                {% if trace.exchanges.userinfo|length > 0 %}
+                {# Step 5: User claims #}
+                {% if 'id_token' == trace.user_data_source %}
+                    <div class="trace-step">
+                        <h4>Your claims were read from the ID token</h4>
+                        <p class="meaning">No request to UserInfo was made; the claims are the badge attributes (which are the ID token claims).</p>
+
+                        <p><strong>Claims:</strong></p>
+                        {% if trace.user_badge is not empty %}
+                            <table class="value-table">
+                                {% for key, value in trace.user_badge %}
+                                    <tr>
+                                        <th>{{ key }}</th>
+                                        <td><code>{{ value|json_encode }}</code></td>
+                                    </tr>
+                                {% endfor %}
+                            </table>
+                        {% endif %}
+
+                        <table class="check-table">
+                            <tr><th>Check</th><th>Result</th></tr>
+                            {% for check in trace.checks %}
+                                {% if check.label == 'sub' %}
+                                    <tr>
+                                        <td><code>{{ check.label }}</code></td>
+                                        <td class="ok">{{ check.detail }}</td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </table>
+                    </div>
+                {% elseif trace.exchanges.userinfo|length > 0 %}
                     <div class="trace-step">
                         <h4>Your claims were fetched from UserInfo</h4>
                         <p class="meaning">
@@ -325,7 +354,12 @@
                     <p class="meaning">
                         Provider: <code>{{ trace.provider }}</code><br>
                         User class: <code>{{ trace.user.class }}</code><br>
-                        Identifier: <code>{{ trace.user.identifier }}</code><br>
+                        Identifier: <code>{{ trace.user.identifier }}</code>
+                        {% if trace.user_identifier_claim == 'sub' %}
+                            (the <code>sub</code> claim, the default)<br>
+                        {% else %}
+                            (the <code>{{ trace.user_identifier_claim }}</code> claim, as user_identifier_claim says)<br>
+                        {% endif %}
                         Roles: 
                         {% for role in trace.user.roles %}
                             <span class="pill">{{ role }}</span>
@@ -352,7 +386,7 @@
                         Flow duration: {{ trace.duration_ms }} ms
                     </p>
                     <p class="lead small">
-                        Log out also ends the Keycloak session through the app's RP-Initiated Logout listener.
+                        Log out runs OidcEndSessionListener (enable_end_session: true): a redirect to the end_session_endpoint with id_token_hint and post_logout_redirect_uri, then Keycloak sends you back to /.
                     </p>
                 </div>
             {% endif %}

@@ -78,6 +78,8 @@ final class FlowRecorder
         $providerClass = $scenario['provider'] ?? 'Symfony\Component\Security\Core\User\OidcUserProvider';
         $allowedTimeDrift = $scenario['allowed_time_drift'] ?? 0;
         $maxAge = $scenario['max_age'] ?? null;
+        $userDataSource = $scenario['user_data_source'] ?? 'userinfo';
+        $userIdentifierClaim = $scenario['user_identifier_claim'] ?? 'sub';
 
         // Build the trace
         $trace = $this->buildTrace(
@@ -91,6 +93,8 @@ final class FlowRecorder
             $providerClass,
             $allowedTimeDrift,
             $maxAge,
+            $userDataSource,
+            $userIdentifierClaim,
             $request,
         );
 
@@ -349,6 +353,8 @@ final class FlowRecorder
         string $providerClass,
         int $allowedTimeDrift,
         ?int $maxAge,
+        string $userDataSource,
+        string $userIdentifierClaim,
         \Symfony\Component\HttpFoundation\Request $request,
     ): array {
         $token = $event->getAuthenticatedToken();
@@ -410,6 +416,8 @@ final class FlowRecorder
             $maxAge,
             $signatureKey,
             $keySource,
+            $userDataSource,
+            $userIdentifierClaim,
         );
 
         // Get client_id for this firewall
@@ -428,6 +436,8 @@ final class FlowRecorder
             'requested_path' => $pendingEntry['requested_path'],
             'provider' => $providerClass,
             'client_id' => $clientId,
+            'user_data_source' => $userDataSource,
+            'user_identifier_claim' => $userIdentifierClaim,
             'auth_request' => [
                 'endpoint' => $pendingEntry['endpoint'],
                 'params' => $pendingEntry['params'],
@@ -541,6 +551,8 @@ final class FlowRecorder
         ?int $maxAge,
         ?array $signatureKey,
         ?string $keySource,
+        string $userDataSource,
+        string $userIdentifierClaim,
     ): array {
         $checks = [];
 
@@ -645,11 +657,20 @@ final class FlowRecorder
         // sub check
         $idTokenSub = ($idTokenDecoded !== null && isset($idTokenDecoded['payload']['sub'])) ? $idTokenDecoded['payload']['sub'] : '';
         $userInfoSub = ($userBadgeAttributes !== null && isset($userBadgeAttributes['sub'])) ? $userBadgeAttributes['sub'] : '';
-        $checks[] = [
-            'label' => 'sub',
-            'detail' => sprintf('ID token sub: %s, UserInfo sub: %s', $idTokenSub, $userInfoSub),
-            'ok' => true,
-        ];
+        
+        if ('id_token' === $userDataSource) {
+            $checks[] = [
+                'label' => 'sub',
+                'detail' => 'sub taken from the validated ID token (no UserInfo cross-check)',
+                'ok' => true,
+            ];
+        } else {
+            $checks[] = [
+                'label' => 'sub',
+                'detail' => sprintf('UserInfo sub matches the ID token sub: %s', $idTokenSub),
+                'ok' => true,
+            ];
+        }
 
         return $checks;
     }

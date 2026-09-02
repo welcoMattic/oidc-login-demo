@@ -89,7 +89,9 @@ function smoke(): void
         'strict' => ['--authz', 'max_age=60', '--authz', 'prompt=login', '--authz', 'login_hint=alice', '--authz', 'ui_locales=fr', '--login-page', 'Mot de passe', '--page', 'auth_time'],
         'es256' => ['--page', 'ES256'],
         'plain' => ['--authz', 'code_challenge_method=plain', '--page', 'OidcUser'],
-        'roles' => ['--page', 'ROLE_ADMIN', '--page', 'ROLE_EDITOR']
+        'roles' => ['--page', 'ROLE_ADMIN', '--page', 'ROLE_EDITOR'],
+        'email' => ['--page', 'User identifier alice@example.com', '--page', 'OidcUser'],
+        'idtoken' => ['--page', 'read from the ID token', '--page', 'OidcUser']
     ];
     
     foreach ($scenarios as $firewall => $expectations) {
@@ -184,7 +186,9 @@ function verify_setup(): void
         'strict' => '/strict',
         'es256' => '/es256',
         'plain' => '/plain',
-        'roles' => '/roles'
+        'roles' => '/roles',
+        'email' => '/email',
+        'idtoken' => '/idtoken'
     ];
     
     foreach ($scenarios as $name => $path) {
