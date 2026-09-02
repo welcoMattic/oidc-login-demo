@@ -1,51 +1,57 @@
 {% extends 'base.html.twig' %}
 
+{% block title %}Symfony 8.2 oidc_login - OpenID Connect Demo{% endblock %}
+
 {% block body %}
 <main>
-    <h1>Symfony OIDC login demo</h1>
-    <p class="lead">Symfony's <code>oidc_login</code> authenticator (OpenID Connect Authorization
-    Code Flow) against a Keycloak 26.7 container. One firewall per scenario, each one
-    configured differently, so a single login shows the option set at work.</p>
-
-    <div class="cards">
-        {% for firewall, scenario in scenarios %}
-            <a class="card" href="{{ path('_oidc_login_start_' ~ firewall) }}">
-                <div>
-                    <strong>{{ scenario.title }}</strong>
-                    <small>{{ scenario.summary }}</small>
-                </div>
-                <div>
-                    <code>{{ firewall }}</code>
-                </div>
-            </a>
-        {% endfor %}
-    </div>
-
-    <div class="cards">
-        {% for firewall, scenario in scenarios %}
-            <a class="card" href="{{ path('app_account', {firewall: firewall}) }}">
-                <div>
-                    <strong>Open protected page</strong>
-                    <small>{{ scenario.title }}</small>
-                </div>
-                <div>
-                    <code>{{ firewall }}</code>
-                </div>
-            </a>
-        {% endfor %}
+    <div class="hero">
+        <p class="eyebrow">OpenID Connect Authorization Code Flow, natively</p>
+        <h1>Symfony 8.2 <code>oidc_login</code></h1>
+        <p class="lead">An anonymous request to a protected page is redirected to Keycloak; the authenticator exchanges the code, verifies the ID token, reads the claims and opens a session.</p>
     </div>
 
     {% if error is not null %}
-        <div class="error">
+        <div class="error-banner">
             <strong>Authentication Error:</strong> {{ error.message }}
         </div>
     {% endif %}
 
-    <h2>What happens when you click</h2>
-    <p class="lead">The page behind the link requires <code>ROLE_USER</code>. The firewall's entry
-    point sends you to the provider with a <code>state</code>, a <code>nonce</code> and a PKCE
-    challenge, the provider sends you back to <code>/&lt;firewall&gt;/callback</code>, and the
-    authenticator exchanges the code for tokens before building the user from the claims. The
-    account page shows what came out of it.</p>
+    {% for group, groupScenarios in {
+        'Client types': ['default', 'basic', 'public'],
+        'The authorization request': ['strict', 'plain'],
+        'The ID token': ['es256'],
+        'The user': ['roles']
+    } %}
+        <div class="section">
+            <h2>{{ group }}</h2>
+            <div class="cards">
+                {% for scenarioName in groupScenarios %}
+                    {% set scenario = scenarios[scenarioName] %}
+                    <div class="card scenario">
+                        <h3>{{ scenario.title }}</h3>
+                        <p class="summary">{{ scenario.summary }}</p>
+                        <div class="meta">
+                            <code>{{ scenarioName }}</code>
+                        </div>
+                        <div class="actions">
+                            <a class="button" href="{{ path('_oidc_login_start_' ~ scenarioName) }}">
+                                Log in
+                            </a>
+                            <a class="button button-quiet" href="{{ path('app_account', {firewall: scenarioName}) }}">
+                                Open a protected page
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endfor %}
+
+    <div class="footer">
+        <p>
+            <strong>Credentials:</strong> alice / alice has the admin and editor roles, bob / bob only editor.
+            <a href="https://localhost:8443/admin/">Keycloak admin console</a> (admin / admin).
+        </p>
+    </div>
 </main>
 {% endblock %}

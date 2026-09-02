@@ -82,7 +82,7 @@ check_substrings() {
             i=$((i + 1))
             continue
         fi
-        if ! echo "$content" | grep -qF -- "$substr"; then
+        if [[ "$content" != *"$substr"* ]]; then
             echo "FAIL: Missing substring: $substr"
             return 1
         fi
@@ -359,7 +359,7 @@ if [[ "$http_code" != "200" ]]; then
     exit 1
 fi
 
-if ! echo "$body" | grep -qF -- "login-actions/authenticate"; then
+if [[ "$body" != *"login-actions/authenticate"* ]]; then
     echo "FAIL: Expected login form (provider session should be gone), got redirect or different page"
     exit 1
 fi
