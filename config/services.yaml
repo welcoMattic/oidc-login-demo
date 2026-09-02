@@ -19,5 +19,13 @@ services:
     App\:
         resource: '../src/'
 
+    # OIDC discovery service for RP-Initiated Logout listener
+    app.oidc_discovery:
+        class: Symfony\Component\Security\Http\Oidc\OidcDiscovery
+        arguments:
+            $httpClient: '@http_client'
+            $cache: '@cache.app'
+            $issuer: '%env(OIDC_PROVIDER_URI)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

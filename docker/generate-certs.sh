@@ -2,9 +2,11 @@
 # Generates the TLS certificate the demo Identity Providers are served with.
 #
 # The OIDC login authenticator requires the *token endpoint* announced by the provider
-# to use HTTPS: the ID token signature is not verified, so the transport is what makes
-# the token trustworthy. A local IdP therefore cannot be served over plain HTTP, and
-# every provider in this demo is published on https://localhost:<port>.
+# to use HTTPS: the token endpoint carries the authorization code and the PKCE verifier
+# one way and returns the ID and access tokens the other, so plain HTTP would expose
+# all of it. The ID token signature is verified against the provider JWKS on top of that.
+# A local IdP therefore cannot be served over plain HTTP, and every provider in this
+# demo is published on https://localhost:<port>.
 #
 # Output (generated once, all of it gitignored):
 #   docker/certs/idp.crt   the certificate the IdPs present, valid for localhost
