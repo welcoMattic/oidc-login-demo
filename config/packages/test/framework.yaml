@@ -1,0 +1,15 @@
+services:
+    # Service for FakeKeycloak - this will be shared across all requests
+    App\Tests\Oidc\FakeKeycloak:
+        class: App\Tests\Oidc\FakeKeycloak
+
+    # Replace the http_client service with our mock client that uses the shared FakeKeycloak
+    http_client:
+        class: Symfony\Component\HttpClient\MockHttpClient
+        arguments:
+            $responseFactory: '@App\Tests\Oidc\FakeKeycloak'
+
+framework:
+    cache:
+        # Use array cache for tests to avoid filesystem persistence between test runs
+        app: cache.adapter.array
