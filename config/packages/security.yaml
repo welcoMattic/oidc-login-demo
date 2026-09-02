@@ -5,7 +5,7 @@ security:
         # session is refreshed. No database is involved anywhere in this demo.
         #
         # It deliberately refuses to let the claims define the security identity: the
-        # identifier is always the verified "sub" claim, a "roles" claim is dropped,
+        # identifier is always the claim the firewall configures (sub by default), a "roles" claim is dropped,
         # and roles stay [ROLE_USER]. Mapping claims onto roles is the job of your own
         # provider, implementing AttributesBasedUserProviderInterface: it receives every
         # claim as attributes.
@@ -62,6 +62,13 @@ security:
                 # - max_age: not set (no re-authentication check)
                 # - authorization_params: [] (no additional parameters on the authorization request)
                 # The "openid" scope is always added to the authorization request.
+
+                # Enable RP-Initiated Logout: the bundle registers OidcEndSessionListener on the
+                # firewall's own event dispatcher at priority 65: on logout it redirects to the
+                # provider end_session_endpoint with id_token_hint and post_logout_redirect_uri.
+                # The Keycloak clients register http://localhost:8001/* as post logout redirect URI.
+                enable_end_session: true
+                post_logout_redirect_path: /
             logout:
                 path: /default/logout
                 target: /
@@ -88,6 +95,10 @@ security:
                 # HTTP Basic authentication at the token endpoint: the client_id is the
                 # username, the client_secret the password, per RFC 6749, Section 2.3.1.
                 token_endpoint_auth_method: client_secret_basic
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
             logout:
                 path: /basic/logout
                 target: /
@@ -115,6 +126,10 @@ security:
                 default_target_path: /public/account
                 failure_path: /
                 scope: [profile, email]
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
             logout:
                 path: /public/logout
                 target: /
@@ -165,6 +180,10 @@ security:
                     required: true
                     algorithms: [RS256]
                     enforce_key_usage_verification: true
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
             logout:
                 path: /strict/logout
                 target: /
@@ -195,6 +214,10 @@ security:
 
                 id_token_signature:
                     algorithms: [ES256]
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
             logout:
                 path: /es256/logout
                 target: /
@@ -222,6 +245,10 @@ security:
                 pkce:
                     enabled: true
                     method: plain
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
             logout:
                 path: /plain/logout
                 target: /
@@ -247,8 +274,78 @@ security:
                 default_target_path: /roles/account
                 failure_path: /
                 scope: [profile, email, roles]
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
             logout:
                 path: /roles/logout
+                target: /
+
+        # The claims are read from the validated ID token instead of the UserInfo endpoint.
+        # Keycloak puts the profile and email claims in the ID token; the userinfo_endpoint
+        # is not even required to be announced; the sub cross-check with UserInfo does not apply.
+        # Named "idtoken" and not "id_token": the bundle registers the authenticator of a
+        # firewall as security.authenticator.oidc_login.<firewall>, and its helper services
+        # under the same prefix (security.authenticator.oidc_login.id_token, .discovery,
+        # .client...), so a firewall named after one of them collides with it and the
+        # container reports a circular reference.
+        idtoken:
+            pattern: ^/idtoken
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_CLIENT_ID)%'
+                client_secret: '%env(OIDC_CLIENT_SECRET)%'
+                check_path: /idtoken/callback
+                start_path: /idtoken/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /idtoken/account
+                failure_path: /
+                scope: [profile, email]
+
+                # Read claims from the ID token instead of UserInfo endpoint.
+                user_data_source: id_token
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /idtoken/logout
+                target: /
+
+        # The identity becomes the email claim instead of the sub UUID.
+        # Only for a provider that guarantees the claim is unique and stable;
+        # the built-in provider builds the OidcUser on that identifier;
+        # the login fails if the claim is missing.
+        email:
+            pattern: ^/email
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_CLIENT_ID)%'
+                client_secret: '%env(OIDC_CLIENT_SECRET)%'
+                check_path: /email/callback
+                start_path: /email/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /email/account
+                failure_path: /
+                scope: [profile, email]
+
+                # Use email claim as the user identifier instead of sub.
+                user_identifier_claim: email
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /email/logout
                 target: /
 
         # Public catch-all: the scenario catalogue and anything outside a scenario prefix.
@@ -266,6 +363,8 @@ security:
         - { path: ^/es256/(start|callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/plain/(start|callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/roles/(start|callback)$, roles: PUBLIC_ACCESS }
+        - { path: ^/email/(start|callback)$, roles: PUBLIC_ACCESS }
+        - { path: ^/idtoken/(start|callback)$, roles: PUBLIC_ACCESS }
 
         # Requiring a role here is what triggers the redirect to the provider: the
         # entry point of an oidc_login firewall always redirects straight to it.
@@ -276,3 +375,5 @@ security:
         - { path: ^/es256, roles: ROLE_USER }
         - { path: ^/plain, roles: ROLE_USER }
         - { path: ^/roles, roles: ROLE_USER }
+        - { path: ^/email, roles: ROLE_USER }
+        - { path: ^/idtoken, roles: ROLE_USER }

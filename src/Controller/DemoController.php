@@ -33,7 +33,7 @@ class DemoController extends AbstractController
         ]);
     }
 
-    #[Route('/{firewall}/account', name: 'app_account', requirements: ['firewall' => 'default|basic|public|strict|es256|plain|roles'])]
+    #[Route('/{firewall}/account', name: 'app_account', requirements: ['firewall' => 'default|basic|public|strict|es256|plain|roles|email|idtoken'])]
     public function account(string $firewall, Request $request, ?Profiler $profiler = null): Response
     {
         $token = $this->tokenStorage->getToken();

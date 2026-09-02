@@ -62,6 +62,14 @@ FRESH_APP_JAR="$(mktemp)"
 # Cleanup
 trap "rm -f '$APP_JAR' '$KC_JAR' '$FRESH_APP_JAR'" EXIT
 
+# curl answered nothing: the server dropped the connection, which set -e would otherwise turn into a silent exit
+require_status() {
+    if [[ -z "$1" ]]; then
+        echo "FAIL: no HTTP status, the request got no answer (${2:-unknown request})"
+        exit 1
+    fi
+}
+
 echo "Testing firewall: $FIREWALL"
 
 # Helper function to check if a string contains all required substrings (literal match)
@@ -126,7 +134,8 @@ START_URL="http://localhost:8001/${FIREWALL}/start"
 echo -n "(1) GET $START_URL with app jar... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$START_URL" 2>/dev/null || true)
-http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$http_code" "step at line 137"
 location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
 
 echo "HTTP $http_code, Location: $location"
@@ -177,7 +186,8 @@ AUTH_URL="$location"
 echo -n "(2) GET $AUTH_URL with Keycloak jar... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" "$AUTH_URL" 2>/dev/null || true)
-http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$http_code" "step at line 188"
 
 echo "HTTP $http_code"
 
@@ -230,7 +240,8 @@ fi
 echo -n "(3) POST login form... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" -X POST -d "$POST_DATA" "$form_action" 2>/dev/null || true)
-http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$http_code" "step at line 241"
 location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
 
 echo "HTTP $http_code, Location: $location"
@@ -253,7 +264,8 @@ CALLBACK_URL="$location"
 echo -n "(4) GET $CALLBACK_URL with app jar... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$CALLBACK_URL" 2>/dev/null || true)
-http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$http_code" "step at line 264"
 location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
 
 echo "HTTP $http_code, Location: $location"
@@ -276,7 +288,8 @@ ACCOUNT_URL="$location"
 echo -n "(5) GET $ACCOUNT_URL... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$ACCOUNT_URL" 2>/dev/null || true)
-http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$http_code" "step at line 287"
 body=$(echo "$response" | sed '1,/^$/d')  # Remove headers
 
 echo "HTTP $http_code"
@@ -301,7 +314,8 @@ LOGOUT_URL="http://localhost:8001/${FIREWALL}/logout"
 echo -n "(6) GET $LOGOUT_URL... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$LOGOUT_URL" 2>/dev/null || true)
-http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$http_code" "step at line 312"
 location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
 
 echo "HTTP $http_code, Location: $location"
@@ -331,7 +345,8 @@ LOGOUT_REDIRECT="$location"
 echo -n "    Following logout redirect... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" -L "$LOGOUT_REDIRECT" 2>/dev/null || true)
-final_http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+final_http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$final_http_code" "step at line 342"
 final_location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' | tail -1 || true)
 
 echo "HTTP $final_http_code"
@@ -349,7 +364,8 @@ echo "OK"
 echo -n "(7) GET original auth URL with KC jar... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" "$AUTH_URL" 2>/dev/null || true)
-http_code=$(echo "$response" | head -1 | grep -oE '[0-9]{3}' | head -1)
+http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+require_status "$http_code" "step at line 360"
 body=$(echo "$response" | sed '1,/^$/d')  # Remove headers
 
 echo "HTTP $http_code"
