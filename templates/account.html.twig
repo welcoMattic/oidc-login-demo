@@ -1,64 +1,362 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Logged in with {{ scenario.title }}{% endblock %}
+{% block title %}Logged in with {{ scenario.title }} - Symfony 8.2 oidc_login{% endblock %}
 
 {% block body %}
 <main>
-    <a class="back" href="{{ path('app_home') }}">&larr; back to the scenario list</a>
-    <h1>Logged in with {{ scenario.title }}</h1>
-    <p class="lead">Firewall <code>{{ firewall }}</code>, Keycloak client <code>{{ scenario.client_id }}</code></p>
+    <a class="back" href="{{ path('app_home') }}">&larr; Back to the scenario list</a>
 
-    <h2>Who you are now</h2>
-    <table>
-        <tr><th>User class</th><td><code>{{ userClass ?? 'none' }}</code></td></tr>
-        <tr><th>User identifier</th><td><code>{{ user ? user.userIdentifier : '-' }}</code></td></tr>
-        <tr><th>Roles</th><td>{% for role in user ? user.roles : [] %}<span class="pill">{{ role }}</span> {% else %}-{% endfor %}</td></tr>
-        <tr><th>Access token</th><td>{{ hasAccessToken ? 'received and kept on the security token' : 'none' }}</td></tr>
-        <tr><th>Preferred username</th><td><code>{{ user.preferredUsername ?? '-' }}</code></td></tr>
-        <tr><th>Email</th><td><code>{{ user.email ?? '-' }}</code></td></tr>
-        <tr><th>Sub</th><td><code>{{ user.sub ?? '-' }}</code></td></tr>
-    </table>
+    <div class="top-bar">
+        <div class="title">
+            <h1>{{ scenario.title }}</h1>
+            <p class="eyebrow">firewall <code>{{ firewall }}</code></p>
+        </div>
+        <div class="actions">
+            {% if user %}
+                <span class="pill">{{ user.preferredUsername ?? user.sub ?? user.userIdentifier }}</span>
+            {% endif %}
+            <a class="button" href="{{ path('_logout_' ~ firewall) }}">Log out</a>
+            <span class="small text-muted">(ends the Keycloak session through the app's RP-Initiated Logout listener)</span>
+        </div>
+    </div>
 
-    <h2>What this firewall demonstrates</h2>
-    <ul class="options">
-        {% for option in scenario.options %}
-            <li><code>{{ option.name }}</code><br><small>{{ option.value }}</small></li>
-        {% endfor %}
-    </ul>
+    <div class="account-layout">
+        <aside class="account-sidebar">
+            <div class="card">
+                <h3>Who you are now</h3>
+                <table class="value-table">
+                    <tr>
+                        <th>User class</th>
+                        <td><code>{{ userClass ?? 'none' }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>User identifier</th>
+                        <td><code>{{ user ? user.userIdentifier : '-' }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Roles</th>
+                        <td>
+                            {% if user %}
+                                {% for role in user.roles %}
+                                    <span class="pill">{{ role }}</span>
+                                {% endfor %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
 
-    <h2>ID token</h2>
-    {% if idTokenData %}
-        <h3>Header</h3>
-        <table>
-            <tr><th>alg</th><td><code>{{ idTokenData.header.alg ?? '-' }}</code></td></tr>
-            <tr><th>kid</th><td><code>{{ idTokenData.header.kid ?? '-' }}</code></td></tr>
-            <tr><th>typ</th><td><code>{{ idTokenData.header.typ ?? '-' }}</code></td></tr>
-        </table>
+                {% if user and user is not null %}
+                    <table class="value-table">
+                        {% if user.name is not null %}
+                            <tr>
+                                <th>Name</th>
+                                <td><code>{{ user.name }}</code></td>
+                            </tr>
+                        {% endif %}
+                        {% if user.givenName is not null %}
+                            <tr>
+                                <th>Given name</th>
+                                <td><code>{{ user.givenName }}</code></td>
+                            </tr>
+                        {% endif %}
+                        {% if user.familyName is not null %}
+                            <tr>
+                                <th>Family name</th>
+                                <td><code>{{ user.familyName }}</code></td>
+                            </tr>
+                        {% endif %}
+                        {% if user.preferredUsername is not null %}
+                            <tr>
+                                <th>Preferred username</th>
+                                <td><code>{{ user.preferredUsername }}</code></td>
+                            </tr>
+                        {% endif %}
+                        {% if user.email is not null %}
+                            <tr>
+                                <th>Email</th>
+                                <td><code>{{ user.email }}</code></td>
+                            </tr>
+                        {% endif %}
+                        {% if user.emailVerified is not null %}
+                            <tr>
+                                <th>Email verified</th>
+                                <td><code>{{ user.emailVerified ? 'true' : 'false' }}</code></td>
+                            </tr>
+                        {% endif %}
+                        {% if user.locale is not null %}
+                            <tr>
+                                <th>Locale</th>
+                                <td><code>{{ user.locale }}</code></td>
+                            </tr>
+                        {% endif %}
+                    </table>
 
-        <h3>Claims</h3>
-        <table>
-            {% for claim, value in idTokenData.payload %}
-                <tr><th>{{ claim }}</th><td><code>{{ value|json_encode|raw }}</code></td></tr>
-            {% endfor %}
-        </table>
-        <p class="lead">Decoded here for display. At login the authenticator checked its
-        <code>iss</code>, <code>aud</code>, <code>exp</code>, <code>iat</code>, <code>nonce</code>,
-        <code>azp</code>, and that its <code>sub</code> matches the UserInfo one.</p>
-    {% else %}
-        <p class="lead">No ID token on the security token.</p>
-    {% endif %}
+                    {% if additionalClaims|length > 0 %}
+                        <h4>Additional claims</h4>
+                        <pre><code>{{ additionalClaims|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_SLASHES')) }}</code></pre>
+                    {% endif %}
 
-    <h2>Logging out</h2>
-    <p class="lead">This firewall configures logout to end the Symfony session and, thanks to
-    the RP-Initiated Logout listener, to end the Keycloak session too. Clicking the button
-    below clears the local session and redirects to Keycloak's end_session_endpoint with
-    an <code>id_token_hint</code> and a <code>post_logout_redirect_uri</code>.</p>
+                    {% if trace is not null and trace.provider is defined %}
+                        <p class="lead small">
+                            {% if 'KeycloakUserProvider' in trace.provider %}
+                                realm_access.roles mapped by App\Security\KeycloakUserProvider
+                            {% else %}
+                                claims cannot grant roles here
+                            {% endif %}
+                        </p>
+                    {% endif %}
+                {% endif %}
+            </div>
 
-    <div class="actions">
-        <a class="button" href="{{ path('_logout_' ~ firewall) }}">
-            Log out here and at Keycloak
-        </a>
-        <a class="button button-quiet" href="{{ path('app_home') }}">Try another scenario</a>
+            <div class="card">
+                <h3>Firewall configuration</h3>
+                
+                {% if scenario.options|length > 0 %}
+                    <div class="margin-bottom-1">
+                        {% for option in scenario.options %}
+                            <span class="option-chip"><strong>{{ option.name }}</strong>: {{ option.value }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% if firewallYaml %}
+                    <details open>
+                        <summary>Raw YAML configuration</summary>
+                        <pre><code>{{ firewallYaml }}</code></pre>
+                    </details>
+                {% endif %}
+            </div>
+
+            {% if profilerToken is not null %}
+                <div class="card dev-only">
+                    <p class="eyebrow no-print">dev only</p>
+                    <h3>Under the hood</h3>
+                    <p class="lead small">Links to the profiler panels of the callback request.</p>
+                    <div class="flex gap-3 flex-wrap">
+                        <a class="button button-quiet" href="/_profiler/{{ profilerToken }}?panel=security">Security panel</a>
+                        <a class="button button-quiet" href="/_profiler/{{ profilerToken }}?panel=http_client">HTTP Client panel</a>
+                    </div>
+                </div>
+            {% endif %}
+        </aside>
+
+        <div class="account-main">
+            {% if trace is null %}
+                <div class="card">
+                    <h3>What just happened</h3>
+                    <p class="lead">No login flow trace available. The session might have been opened another way.</p>
+                </div>
+            {% else %}
+                <h2>What just happened</h2>
+
+                {# Step 1: Authorization request #}
+                <div class="trace-step">
+                    <h4>
+                        {% if trace.trigger == 'start_route' %}
+                            You clicked Log in
+                        {% else %}
+                            You asked for a protected page
+                        {% endif %}
+                    </h4>
+                    <p class="meaning">Requested path: <code>{{ trace.requested_path }}</code></p>
+
+                    <p><strong>Authorization request:</strong></p>
+                    <p class="small">{{ trace.auth_request.endpoint }}</p>
+                    
+                    <table class="param-table">
+                        <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+                        {% for param, value in trace.auth_request.params %}
+                            <tr>
+                                <td><code>{{ param }}</code></td>
+                                <td><code>{{ value }}</code></td>
+                                <td class="small">
+                                    {% if param == 'response_type' %}the Authorization Code Flow
+                                    {% elseif param == 'client_id' %}the OIDC client identifier
+                                    {% elseif param == 'redirect_uri' %}must be registered at the provider
+                                    {% elseif param == 'scope' %}openid is always added
+                                    {% elseif param == 'state' %}stops login CSRF, checked on the callback
+                                    {% elseif param == 'nonce' %}binds the ID token to this request
+                                    {% elseif param == 'code_challenge' %}PKCE, the SHA-256 of a verifier kept in the session
+                                    {% elseif param == 'code_challenge_method' %}PKCE
+                                    {% elseif param == 'max_age' %}how old the authentication at Keycloak may be
+                                    {% elseif param == 'prompt' %}from authorization_params
+                                    {% elseif param == 'login_hint' %}from authorization_params
+                                    {% elseif param == 'ui_locales' %}from authorization_params
+                                    {% else %}{{ param }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+
+                {# Step 2: Callback #}
+                <div class="trace-step">
+                    <h4>Keycloak authenticated you and sent you back</h4>
+                    <p class="meaning">
+                        Callback path: <code>{{ trace.callback.path }}</code> with query:
+                        {% for key, value in trace.callback.query %}{% if value is not null %}<code>{{ key }}={{ value }}</code> {% endif %}{% endfor %}
+                    </p>
+
+                    <table class="check-table">
+                        <tr>
+                            <th>Check</th>
+                            <th>Result</th>
+                        </tr>
+                        {% for check in trace.checks %}
+                            {% if check.label == 'state' %}
+                                <tr>
+                                    <td><code>state</code></td>
+                                    <td class="ok">{{ check.detail }}</td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </table>
+                </div>
+
+                {# Step 3: Token exchange #}
+                {% if trace.exchanges.token|length > 0 %}
+                    <div class="trace-step">
+                        <h4>The code was exchanged for tokens</h4>
+                        <p class="meaning">
+                            {% for exchange in trace.exchanges.token %}
+                                <code>{{ exchange.method }}</code> {{ exchange.url }}
+                                {% if exchange.request_auth is defined %}<br><code>{{ exchange.request_auth }}</code>{% endif %}
+                                {% if exchange.request_body is defined and exchange.request_body is not empty %}
+                                    <br>
+                                    <span class="small">Body:</span>
+                                    {% for key, value in exchange.request_body %}
+                                        <code>{{ key }}={{ value }}</code> 
+                                    {% endfor %}
+                                {% endif %}
+                            {% endfor %}
+                        </p>
+
+                        <p><strong>Token response:</strong></p>
+                        {% for exchange in trace.exchanges.token %}
+                            {% if exchange.response_summary is not empty %}
+                                <table class="value-table">
+                                    {% for key, value in exchange.response_summary %}
+                                        <tr>
+                                            <th>{{ key }}</th>
+                                            <td><code>{{ value|json_encode }}</code></td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {# Step 4: ID token verification #}
+                {% if trace.id_token_decoded is not null %}
+                    <div class="trace-step">
+                        <h4>The ID token was verified</h4>
+                        <p class="meaning">
+                            Header: 
+                            {% for key, value in trace.id_token_decoded.header %}
+                                <code>{{ key }}: {{ value|json_encode }}</code>
+                            {% endfor %}
+                        </p>
+
+                        {% if trace.signature_key is not null %}
+                            <p><strong>Signature key:</strong> kid: <code>{{ trace.signature_key.kid }}</code>, kty: <code>{{ trace.signature_key.kty }}</code>, alg: <code>{{ trace.signature_key.alg }}</code>, use: <code>{{ trace.signature_key.use }}</code>{% if trace.signature_key.crv is defined %}, crv: <code>{{ trace.signature_key.crv }}</code>{% endif %} (<code>{{ trace.signature_key.source }}</code>)</p>
+                        {% endif %}
+
+                        <p><strong>Checks:</strong></p>
+                        <table class="check-table">
+                            <tr><th>Check</th><th>Result</th></tr>
+                            {% for check in trace.checks %}
+                                {% if check.label in ['signature', 'iss', 'aud', 'azp', 'exp', 'iat', 'nbf', 'nonce', 'auth_time'] %}
+                                    <tr>
+                                        <td><code>{{ check.label }}</code></td>
+                                        <td class="ok">{{ check.detail }}</td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </table>
+                    </div>
+                {% endif %}
+
+                {# Step 5: User claims from UserInfo #}
+                {% if trace.exchanges.userinfo|length > 0 %}
+                    <div class="trace-step">
+                        <h4>Your claims were fetched from UserInfo</h4>
+                        <p class="meaning">
+                            {% for exchange in trace.exchanges.userinfo %}
+                                <code>{{ exchange.method }}</code> {{ exchange.url }}
+                                {% if exchange.request_auth is defined %}<br><code>{{ exchange.request_auth }}</code>{% endif %}
+                            {% endfor %}
+                        </p>
+
+                        <p><strong>Claims:</strong></p>
+                        {% for exchange in trace.exchanges.userinfo %}
+                            {% if exchange.response_summary is not empty %}
+                                <table class="value-table">
+                                    {% for key, value in exchange.response_summary %}
+                                        <tr>
+                                            <th>{{ key }}</th>
+                                            <td><code>{{ value|json_encode }}</code></td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            {% endif %}
+                        {% endfor %}
+
+                        <table class="check-table">
+                            <tr><th>Check</th><th>Result</th></tr>
+                            {% for check in trace.checks %}
+                                {% if check.label == 'sub' %}
+                                    <tr>
+                                        <td><code>{{ check.label }}</code></td>
+                                        <td class="ok">{{ check.detail }}</td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </table>
+                    </div>
+                {% endif %}
+
+                {# Step 6: User was built #}
+                <div class="trace-step">
+                    <h4>The user was built</h4>
+                    <p class="meaning">
+                        Provider: <code>{{ trace.provider }}</code><br>
+                        User class: <code>{{ trace.user.class }}</code><br>
+                        Identifier: <code>{{ trace.user.identifier }}</code><br>
+                        Roles: 
+                        {% for role in trace.user.roles %}
+                            <span class="pill">{{ role }}</span>
+                        {% endfor %}
+                    </p>
+                    <p class="lead small">
+                        {% if 'KeycloakUserProvider' in trace.provider %}
+                            realm_access.roles mapped by App\Security\KeycloakUserProvider
+                        {% else %}
+                            claims cannot grant roles here
+                        {% endif %}
+                    </p>
+                </div>
+
+                {# Step 7: Session opened #}
+                <div class="trace-step">
+                    <h4>A session was opened</h4>
+                    <p class="meaning">
+                        The security token carries:
+                        {% for attr in trace.authenticated_token.attributes %}
+                            <code>{{ attr }}</code>
+                        {% endfor %}
+                        <br>
+                        Flow duration: {{ trace.duration_ms }} ms
+                    </p>
+                    <p class="lead small">
+                        Log out also ends the Keycloak session through the app's RP-Initiated Logout listener.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
     </div>
 </main>
 {% endblock %}
