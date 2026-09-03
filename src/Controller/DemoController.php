@@ -33,7 +33,7 @@ class DemoController extends AbstractController
         ]);
     }
 
-    #[Route('/{firewall}/account', name: 'app_account', requirements: ['firewall' => 'default|basic|public|strict|es256|plain|roles|email|idtoken'])]
+    #[Route('/{firewall}/account', name: 'app_account', requirements: ['firewall' => 'default|basic|public|strict|es256|plain|roles|email|idtoken|callback'])]
     public function account(string $firewall, Request $request, ?Profiler $profiler = null): Response
     {
         $token = $this->tokenStorage->getToken();
@@ -73,7 +73,13 @@ class DemoController extends AbstractController
         // Get profiler token for the callback URL in dev environment
         $profilerToken = null;
         if ($profiler !== null) {
-            $callbackUrl = '/' . $firewall . '/callback';
+            // Use the actual callback path from trace if available, otherwise fall back to default
+            $callbackUrl = null;
+            if ($trace !== null && isset($trace['callback']['path'])) {
+                $callbackUrl = $trace['callback']['path'];
+            } else {
+                $callbackUrl = '/' . $firewall . '/callback';
+            }
             $tokens = $profiler->find(null, $callbackUrl, 1, 'GET', null, null);
             if (count($tokens) > 0) {
                 $profilerToken = $tokens[0]['token'];

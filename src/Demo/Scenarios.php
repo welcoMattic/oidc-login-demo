@@ -151,6 +151,21 @@ final class Scenarios
                     ['name' => 'enable_end_session', 'value' => 'true'],
                 ],
             ],
+            'callback' => [
+                'title' => 'Custom callback route',
+                'summary' => 'check_path holds a route name, app_callback_return, so the provider sends the browser back to /callback/return-from-keycloak (the route the application declares) instead of the /callback/callback the loader would have registered: the callback lives wherever the application wants it.',
+                'client_id' => 'symfony-demo',
+                'provider' => 'Symfony\Component\Security\Core\User\OidcUserProvider',
+                'user_data_source' => 'userinfo',
+                'user_identifier_claim' => 'sub',
+                'allowed_time_drift' => 0,
+                'max_age' => null,
+                'options' => [
+                    ['name' => 'check_path', 'value' => 'app_callback_return (a route name)'],
+                    ['name' => 'redirect_uri', 'value' => 'http://localhost:8001/callback/return-from-keycloak (the URL of that route)'],
+                    ['name' => 'enable_end_session', 'value' => 'true'],
+                ],
+            ],
         ];
     }
 

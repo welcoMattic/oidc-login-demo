@@ -140,7 +140,7 @@ class LogoutTest extends WebTestCase
      */
     public function testAllFirewallsSupportRpInitiatedLogout(): void
     {
-        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken'];
+        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken', 'callback'];
         
         foreach ($firewalls as $firewall) {
             // one kernel per firewall: WebTestCase refuses to boot a second kernel otherwise
@@ -162,7 +162,8 @@ class LogoutTest extends WebTestCase
             $fakeKeycloak->expectAuthorization($location);
             $authorizationCode = $fakeKeycloak->issueCode();
             
-            $client->request('GET', '/' . $firewall . '/callback?code=' . $authorizationCode . '&state=' . $params['state']);
+            $callbackPath = parse_url($params['redirect_uri'], PHP_URL_PATH);
+            $client->request('GET', $callbackPath . '?code=' . $authorizationCode . '&state=' . $params['state']);
             $client->followRedirect();
             
             // Now logout

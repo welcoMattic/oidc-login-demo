@@ -21,7 +21,7 @@ security:
             pattern: ^/(_profiler|_wdt|assets|build)/
             security: false
 
-        # Seven oidc_login firewalls, one scenario each, all against the same Keycloak realm.
+        # Ten oidc_login firewalls, one scenario each, all against the same Keycloak realm.
         # Each one lives under its own URL prefix (pattern) so the routes, the start
         # flow and the callback do not clash.
 
@@ -71,6 +71,47 @@ security:
                 post_logout_redirect_path: /
             logout:
                 path: /default/logout
+                target: /
+
+        # A custom callback route: check_path holds a route NAME declared by the
+        # application instead of a path. The route loader then declares nothing for it
+        # and the application defines the route (app_callback_return at
+        # /callback/return-from-keycloak). The redirect_uri sent to the provider becomes
+        # the absolute URL of that route (http://localhost:8001/callback/return-from-keycloak),
+        # which must be registered at the provider (the realm registers http://localhost:8001/*).
+        # The route needs no controller because the authenticator handles every request on
+        # its check path; a successful login redirects to default_target_path and a failed
+        # one to failure_path.
+        callback:
+            pattern: ^/callback
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_CLIENT_ID)%'
+                client_secret: '%env(OIDC_CLIENT_SECRET)%'
+                scope: [profile, email]
+
+                # check_path accepts a route name instead of a path. The route loader then
+                # declares nothing for it: the application defines the route itself, here in
+                # config/routes/security.yaml, at /callback/return-from-keycloak. The redirect_uri
+                # sent to the provider is the absolute URL of that route, so it must be registered
+                # there (the realm registers http://localhost:8001/*). The route needs no
+                # controller: the authenticator handles every request on its check path, a
+                # successful login redirects to default_target_path and a failed one to failure_path.
+                check_path: app_callback_return
+                start_path: /callback/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /callback/account
+                failure_path: /
+
+                # Enable RP-Initiated Logout (the core OidcEndSessionListener replaces the app listener).
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /callback/logout
                 target: /
 
         # Same as default, but the client secret travels as HTTP Basic credentials
@@ -365,6 +406,7 @@ security:
         - { path: ^/roles/(start|callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/email/(start|callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/idtoken/(start|callback)$, roles: PUBLIC_ACCESS }
+        - { path: ^/callback/(start|return-from-keycloak)$, roles: PUBLIC_ACCESS }
 
         # Requiring a role here is what triggers the redirect to the provider: the
         # entry point of an oidc_login firewall always redirects straight to it.
@@ -377,3 +419,4 @@ security:
         - { path: ^/roles, roles: ROLE_USER }
         - { path: ^/email, roles: ROLE_USER }
         - { path: ^/idtoken, roles: ROLE_USER }
+        - { path: ^/callback, roles: ROLE_USER }

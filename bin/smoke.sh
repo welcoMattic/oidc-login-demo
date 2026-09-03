@@ -6,7 +6,7 @@
 # Steps (each prints OK/FAIL and exits 1 on failure):
 #   (1) GET /<firewall>/start with a cookie jar, expect 302 to Keycloak with response_type=code, state=, nonce=, scope=openid
 #   (2) GET the Keycloak auth URL, find the login form action (login-actions/authenticate) and unescape it, check --login-page substrings
-#   (3) POST username=alice, password=alice to the form action, expect 302 to /<firewall>/callback
+#   (3) POST username=alice, password=alice to the form action, expect 302 to the redirect_uri from step 1
 #   (4) GET the callback with the app jar, expect 302 to /<firewall>/account
 #   (5) GET the account page, expect 200 and --page substrings in the HTML-unescaped, tag-stripped text
 #   (6) GET /<firewall>/logout, expect 302 to Keycloak end_session_endpoint with id_token_hint and post_logout_redirect_uri
@@ -181,13 +181,31 @@ fi
 
 echo "OK"
 
+# Extract redirect_uri from the authorization URL to use as expected callback
+# Use python3 to URL-decode it
+redirect_uri_encoded=$(echo "$location" | grep -oE 'redirect_uri=[^&]*' | sed 's/redirect_uri=//' || true)
+if [[ -z "$redirect_uri_encoded" ]]; then
+    echo "FAIL: No redirect_uri parameter found in authorization URL"
+    exit 1
+fi
+
+# URL-decode the redirect_uri using python3
+redirect_uri=$(python3 -c "
+import urllib.parse
+import sys
+print(urllib.parse.unquote(sys.argv[1]))
+" "$redirect_uri_encoded")
+
+# Derive expected callback from redirect_uri (remove query string if any)
+EXPECTED_CALLBACK="${redirect_uri%%\?*}"
+
 # (2) GET the auth URL with Keycloak jar, find login form and check login page substrings
 AUTH_URL="$location"
 echo -n "(2) GET $AUTH_URL with Keycloak jar... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" "$AUTH_URL" 2>/dev/null || true)
 http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
-require_status "$http_code" "step at line 188"
+require_status "$http_code" "step at line 206"
 
 echo "HTTP $http_code"
 
@@ -241,7 +259,7 @@ echo -n "(3) POST login form... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" -X POST -d "$POST_DATA" "$form_action" 2>/dev/null || true)
 http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
-require_status "$http_code" "step at line 241"
+require_status "$http_code" "step at line 260"
 location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
 
 echo "HTTP $http_code, Location: $location"
@@ -251,7 +269,6 @@ if [[ "$http_code" != "302" ]]; then
     exit 1
 fi
 
-EXPECTED_CALLBACK="http://localhost:8001/${FIREWALL}/callback"
 if ! echo "$location" | grep -qF -- "${EXPECTED_CALLBACK}?"; then
     echo "FAIL: Expected redirect to ${EXPECTED_CALLBACK}, got $location"
     exit 1
@@ -265,7 +282,7 @@ echo -n "(4) GET $CALLBACK_URL with app jar... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$CALLBACK_URL" 2>/dev/null || true)
 http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
-require_status "$http_code" "step at line 264"
+require_status "$http_code" "step at line 283"
 location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
 
 echo "HTTP $http_code, Location: $location"
@@ -289,7 +306,7 @@ echo -n "(5) GET $ACCOUNT_URL... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$ACCOUNT_URL" 2>/dev/null || true)
 http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
-require_status "$http_code" "step at line 287"
+require_status "$http_code" "step at line 307"
 body=$(echo "$response" | sed '1,/^$/d')  # Remove headers
 
 echo "HTTP $http_code"
@@ -315,7 +332,7 @@ echo -n "(6) GET $LOGOUT_URL... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$LOGOUT_URL" 2>/dev/null || true)
 http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
-require_status "$http_code" "step at line 312"
+require_status "$http_code" "step at line 333"
 location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
 
 echo "HTTP $http_code, Location: $location"
@@ -346,7 +363,7 @@ echo -n "    Following logout redirect... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" -L "$LOGOUT_REDIRECT" 2>/dev/null || true)
 final_http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
-require_status "$final_http_code" "step at line 342"
+require_status "$final_http_code" "step at line 364"
 final_location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' | tail -1 || true)
 
 echo "HTTP $final_http_code"
@@ -365,7 +382,7 @@ echo -n "(7) GET original auth URL with KC jar... "
 
 response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" "$AUTH_URL" 2>/dev/null || true)
 http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
-require_status "$http_code" "step at line 360"
+require_status "$http_code" "step at line 383"
 body=$(echo "$response" | sed '1,/^$/d')  # Remove headers
 
 echo "HTTP $http_code"
