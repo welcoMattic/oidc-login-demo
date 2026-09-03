@@ -9,3 +9,10 @@ _security_logout:
 _oidc_login_callbacks:
     resource: security.authenticator.oidc_login.route_loader
     type: service
+
+# Custom callback route for the callback scenario: check_path is a route name
+# (app_callback_return) instead of a path, so the loader declares nothing for it
+# and the application defines the route itself.
+app_callback_return:
+    path: /callback/return-from-keycloak
+    # No controller: the authenticator handles every request on its check path

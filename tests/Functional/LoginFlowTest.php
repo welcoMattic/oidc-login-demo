@@ -13,7 +13,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 class LoginFlowTest extends WebTestCase
 {
     /**
-     * Data provider for all nine scenarios.
+     * Data provider for all ten scenarios.
      */
     public static function scenarioProvider(): array
     {
@@ -27,6 +27,7 @@ class LoginFlowTest extends WebTestCase
             ['roles'],
             ['email'],
             ['idtoken'],
+            ['callback'],
         ];
     }
 
@@ -66,7 +67,12 @@ class LoginFlowTest extends WebTestCase
         $this->assertStringEndsWith('-test', $params['client_id']);
         
         $this->assertArrayHasKey('redirect_uri', $params);
-        $this->assertStringStartsWith('http://localhost/' . $firewall . '/callback', $params['redirect_uri']);
+        
+        if ($firewall === 'callback') {
+            $this->assertEquals('http://localhost/callback/return-from-keycloak', $params['redirect_uri']);
+        } else {
+            $this->assertStringStartsWith('http://localhost/' . $firewall . '/callback', $params['redirect_uri']);
+        }
         
         $this->assertArrayHasKey('scope', $params);
         $this->assertStringContainsString('openid', $params['scope']);
@@ -115,7 +121,10 @@ class LoginFlowTest extends WebTestCase
         
         // Step 2: Callback with the authorization code
         $state = $params['state'];
-        $client->request('GET', '/' . $firewall . '/callback?code=' . $authorizationCode . '&state=' . $state);
+        
+        // Derive callback path from redirect_uri
+        $callbackPath = parse_url($params['redirect_uri'], PHP_URL_PATH);
+        $client->request('GET', $callbackPath . '?code=' . $authorizationCode . '&state=' . $state);
         
         // Should redirect to the account page after successful authentication
         $this->assertTrue($client->getResponse()->isRedirect());
@@ -320,7 +329,8 @@ class LoginFlowTest extends WebTestCase
         $authorizationCode = $fakeKeycloak->issueCode();
         
         // Complete the login
-        $client->request('GET', '/default/callback?code=' . $authorizationCode . '&state=' . $params['state']);
+        $callbackPath = parse_url($params['redirect_uri'], PHP_URL_PATH);
+        $client->request('GET', $callbackPath . '?code=' . $authorizationCode . '&state=' . $params['state']);
         $client->followRedirect();
         
         $content = $client->getResponse()->getContent();
@@ -374,7 +384,8 @@ class LoginFlowTest extends WebTestCase
         $authorizationCode = $fakeKeycloak->issueCode();
         
         // Complete the login
-        $client->request('GET', '/' . $firewall . '/callback?code=' . $authorizationCode . '&state=' . $params['state']);
+        $callbackPath = parse_url($params['redirect_uri'], PHP_URL_PATH);
+        $client->request('GET', $callbackPath . '?code=' . $authorizationCode . '&state=' . $params['state']);
         $client->followRedirect();
         
         $content = $client->getResponse()->getContent();

@@ -91,7 +91,8 @@ function smoke(): void
         'plain' => ['--authz', 'code_challenge_method=plain', '--page', 'OidcUser'],
         'roles' => ['--page', 'ROLE_ADMIN', '--page', 'ROLE_EDITOR'],
         'email' => ['--page', 'User identifier alice@example.com', '--page', 'OidcUser'],
-        'idtoken' => ['--page', 'read from the ID token', '--page', 'OidcUser']
+        'idtoken' => ['--page', 'read from the ID token', '--page', 'OidcUser'],
+        'callback' => ['--authz', 'redirect_uri=http%3A%2F%2Flocalhost%3A8001%2Fcallback%2Freturn-from-keycloak', '--page', 'return-from-keycloak', '--page', 'OidcUser']
     ];
     
     foreach ($scenarios as $firewall => $expectations) {
@@ -188,7 +189,8 @@ function verify_setup(): void
         'plain' => '/plain',
         'roles' => '/roles',
         'email' => '/email',
-        'idtoken' => '/idtoken'
+        'idtoken' => '/idtoken',
+        'callback' => '/callback'
     ];
     
     foreach ($scenarios as $name => $path) {

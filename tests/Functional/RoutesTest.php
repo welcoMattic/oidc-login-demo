@@ -28,10 +28,15 @@ class RoutesTest extends WebTestCase
             $statusCode = $client->getResponse()->getStatusCode();
             $this->assertNotEquals(404, $statusCode, "Callback route for $firewall should exist");
         }
+        
+        // Test callback scenario's custom route
+        $client->request('GET', '/callback/return-from-keycloak');
+        $statusCode = $client->getResponse()->getStatusCode();
+        $this->assertNotEquals(404, $statusCode, "Custom callback route for callback scenario should exist");
     }
 
     /**
-     * Test that the home page lists all nine "Log in" links pointing to the start routes.
+     * Test that the home page lists all ten "Log in" links pointing to the start routes.
      */
     public function testHomePageListsAllLoginLinks(): void
     {
@@ -43,8 +48,8 @@ class RoutesTest extends WebTestCase
         
         $content = $client->getResponse()->getContent();
         
-        // Check that all nine login links are present
-        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken'];
+        // Check that all ten login links are present
+        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken', 'callback'];
         
         foreach ($firewalls as $firewall) {
             $startPath = '/' . $firewall . '/start';
@@ -61,6 +66,7 @@ class RoutesTest extends WebTestCase
                 'roles' => 'Role Mapping',
                 'email' => 'Identifier from another claim',
                 'idtoken' => 'Claims from the ID token',
+                'callback' => 'Custom callback route',
             ];
             
             $title = $scenarioTitles[$firewall];
@@ -76,7 +82,7 @@ class RoutesTest extends WebTestCase
         $client = static::createClient();
         $client->disableReboot();
         
-        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken'];
+        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken', 'callback'];
         
         foreach ($firewalls as $firewall) {
             $client->request('GET', '/' . $firewall . '/account');
@@ -115,6 +121,24 @@ class RoutesTest extends WebTestCase
             $this->assertNotNull($startRoute, "Start route $startRouteName should exist");
             $this->assertEquals('/' . $firewall . '/start', $startRoute->getPath(), "Start route $startRouteName should have path /$firewall/start");
         }
+        
+        // For callback scenario, the loader should NOT declare a callback route (check_path is a route name)
+        $callbackCallbackRoute = $router->getRouteCollection()->get('_oidc_login_callback_callback');
+        $this->assertNull($callbackCallbackRoute, "Callback route _oidc_login_callback_callback should NOT exist (check_path is a route name)");
+        
+        // But it should have a start route
+        $callbackStartRoute = $router->getRouteCollection()->get('_oidc_login_start_callback');
+        $this->assertNotNull($callbackStartRoute, "Start route _oidc_login_start_callback should exist");
+        $this->assertEquals('/callback/start', $callbackStartRoute->getPath(), "Start route _oidc_login_start_callback should have path /callback/start");
+        
+        // Check that the custom app_callback_return route exists
+        $customCallbackRoute = $router->getRouteCollection()->get('app_callback_return');
+        $this->assertNotNull($customCallbackRoute, "Custom route app_callback_return should exist");
+        $this->assertEquals('/callback/return-from-keycloak', $customCallbackRoute->getPath(), "Custom route app_callback_return should have path /callback/return-from-keycloak");
+        
+        // Check that it has no _controller default
+        $defaults = $customCallbackRoute->getDefaults();
+        $this->assertArrayNotHasKey('_controller', $defaults, "Custom route app_callback_return should have no _controller default");
     }
 
     /**

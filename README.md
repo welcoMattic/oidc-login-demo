@@ -1,6 +1,6 @@
 # Symfony 8.2 oidc_login demo
 
-A Symfony 8.2 application that showcases the new `oidc_login` firewall authenticator implementing the OpenID Connect Authorization Code Flow natively, against a real Keycloak 26 provider. Nine firewalls exercise every option of the merged feature, and after each login the account page replays the whole flow with the real values: authorization request, callback, code exchange, ID token verification, UserInfo call, user built.
+A Symfony 8.2 application that showcases the new `oidc_login` firewall authenticator implementing the OpenID Connect Authorization Code Flow natively, against a real Keycloak 26 provider. Ten firewalls exercise every option of the merged feature, and after each login the account page replays the whole flow with the real values: authorization request, callback, code exchange, ID token verification, UserInfo call, user built.
 
 ## Try it
 
@@ -45,6 +45,7 @@ Each firewall tests a different configuration set. The firewall names are the UR
 | `roles` | Custom user provider (`KeycloakUserProvider`) maps realm roles from the `realm_access.roles` claim onto Symfony roles | User gets ROLE_ADMIN and ROLE_EDITOR from Keycloak realm roles | `symfony-demo` |
 | `email` | `user_identifier_claim: email` | Identity becomes the email address instead of the sub UUID | `symfony-demo` |
 | `idtoken` | `user_data_source: id_token` | Claims read from the validated ID token, no UserInfo request | `symfony-demo` |
+| `callback` | `check_path: app_callback_return`, a route name | The redirect_uri in the authorization request and the callback path in step 2 of the trace, both at /callback/return-from-keycloak, and no `_oidc_login_callback_callback` route in `debug:router` | `symfony-demo` |
 
 The flow can start in two ways: clicking the *Log in* button calls the route the `start_path` option declares (`_oidc_login_start_<firewall>`), while opening a protected page directly triggers the entry point, which is the authenticator itself redirecting straight to the provider.
 
@@ -58,7 +59,7 @@ The complete `oidc_login` option set, with defaults from `OidcLoginFactory` and 
 | `client_id` | *required* | all | Client identifier issued by the provider |
 | `client_authentication` | *required* | all | How the client authenticates at the token endpoint, exactly one of: `client_secret_basic` or `client_secret_post` with the secret, `none` for a public client, or the `id` of a `ClientAuthenticationInterface` service. There is no default |
 | `scope` | `['openid']` | `default` | `openid` always added; `profile` and `email` requested to get claims |
-| `check_path` | `/oidc/callback` | all | Callback path, must match redirect URI registered with provider |
+| `check_path` | `/oidc/callback` | `callback` | Callback path, must match redirect URI registered with provider; a route name is also accepted (the loader then declares nothing for it) |
 | `start_path` | `/oidc/start` | all | Path for the route that starts the flow |
 | `pkce.enabled` | `true` | `plain` | Cannot be false for public clients |
 | `pkce.method` | `S256` | `plain` (`plain`) | RFC 7636 mandates S256 for clients that support it |
@@ -100,6 +101,10 @@ The route loader import in `config/routes/security.yaml` registers one callback 
 _oidc_login_callbacks:
     resource: security.authenticator.oidc_login.route_loader
     type: service
+
+# When check_path is a route name, the loader declares nothing and the application defines it:
+app_callback_return:
+    path: /callback/return-from-keycloak
 ```
 
 The recipe pull request [symfony/recipes#1569](https://github.com/symfony/recipes/pull/1569) will do it automatically for new projects once merged.
@@ -161,7 +166,7 @@ RP-Initiated Logout is implemented by the core `OidcEndSessionListener` which re
 ```
 castor.php                                    Castor tasks (install, start, stop, smoke, test, cc, logs, open, restart, clean)
 compose.yaml                                  Docker Compose with Keycloak 26.7
-config/packages/security.yaml                Nine oidc_login firewalls, one scenario each
+config/packages/security.yaml                Ten oidc_login firewalls, one scenario each
 config/packages/http_client.yaml             Trusts the demo certificate for HTTPS to localhost:8443
 config/routes/security.yaml                  Imports the OIDC callback route loader
 docker/keycloak/realm-demo.json              Keycloak realm, four clients, two users and their roles
