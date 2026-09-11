@@ -108,13 +108,11 @@ final class TestKeys
         $keyData = $publicKey->all();
 
         // Ensure required fields are present
-        $keyData['kty'] = $keyData['kty'] ?? 'RSA';
-        $keyData['use'] = $keyData['use'] ?? 'sig';
-        $keyData['alg'] = $keyData['alg'] ?? 'RS256';
-        $keyData['kid'] = $keyData['kid'] ?? 'unknown';
+        $keyData['kty'] ??= 'RSA';
+        $keyData['use'] ??= 'sig';
+        $keyData['alg'] ??= 'RS256';
+        $keyData['kid'] ??= 'unknown';
 
         return $keyData;
     }
-
-
 }

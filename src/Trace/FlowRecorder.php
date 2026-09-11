@@ -29,13 +29,12 @@ final class FlowRecorder
         private RequestStack $requestStack,
         private HttpClientInterface $httpClient,
         private \App\Oidc\JwtDecoder $jwtDecoder,
-    ) {
-    }
+    ) {}
 
     public function __invoke(LoginSuccessEvent $event): void
     {
         $request = $this->requestStack->getCurrentRequest();
-        
+
         // Only proceed if we have a request with a session
         if (null === $request || !$request->hasSession()) {
             return;
@@ -199,7 +198,11 @@ final class FlowRecorder
                 foreach ($bodyData as $key => $value) {
                     if ($key === 'client_secret') {
                         $filteredBody[$key] = '***';
-                    } elseif (in_array($key, ['code_verifier', 'code', 'grant_type', 'redirect_uri', 'client_id'], true)) {
+                    } elseif (in_array(
+                        $key,
+                        ['code_verifier', 'code', 'grant_type', 'redirect_uri', 'client_id'],
+                        true,
+                    )) {
                         $filteredBody[$key] = $value;
                     } else {
                         $filteredBody[$key] = $value;
@@ -253,7 +256,11 @@ final class FlowRecorder
         }
 
         // Public client
-        if (!isset($options['auth_bearer']) && !isset($options['auth_basic']) && !isset($options['body']['client_secret'])) {
+        if (
+            !isset($options['auth_bearer'])
+            && !isset($options['auth_basic'])
+            && !isset($options['body']['client_secret'])
+        ) {
             return 'none: a public client sends no credentials';
         }
 
@@ -284,9 +291,7 @@ final class FlowRecorder
                 // Only include issuer and endpoint URLs
                 $result = [];
                 foreach ($json as $key => $value) {
-                    if ($key === 'issuer' || 
-                        str_ends_with($key, '_endpoint') || 
-                        $key === 'jwks_uri') {
+                    if ($key === 'issuer' || str_ends_with($key, '_endpoint') || $key === 'jwks_uri') {
                         $result[$key] = $value;
                     }
                 }
@@ -362,7 +367,7 @@ final class FlowRecorder
 
         // Get token data and user badge attributes using public API
         $tokenData = $passport->getAttribute('oidc_token_data');
-        
+
         /** @var \Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge|null $userBadge */
         $userBadge = $passport->getBadge(\Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge::class);
         $userBadgeAttributes = $userBadge?->getAttributes() ?? [];
@@ -371,14 +376,18 @@ final class FlowRecorder
         $idTokenDecoded = null;
         $signatureKey = null;
         $keySource = null;
-        
+
         if (isset($tokenData['id_token']) && is_string($tokenData['id_token'])) {
             try {
                 $idTokenDecoded = $this->jwtDecoder::decode($tokenData['id_token']);
-                
+
                 // Try to find the matching JWKS key
                 if (isset($idTokenDecoded['header']['kid'])) {
-                    $keyData = $this->findMatchingJwksKey($idTokenDecoded['header']['kid'], $classifiedExchanges, $discoveryConfig);
+                    $keyData = $this->findMatchingJwksKey(
+                        $idTokenDecoded['header']['kid'],
+                        $classifiedExchanges,
+                        $discoveryConfig,
+                    );
                     if ($keyData !== null) {
                         $signatureKey = $keyData;
                         $keySource = $keyData['source'];
@@ -392,14 +401,14 @@ final class FlowRecorder
         // Parse timestamps
         $startedAtStr = $pendingEntry['started_at'];
         $finishedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-        
+
         try {
             $startedAt = new \DateTimeImmutable($startedAtStr, new \DateTimeZone('UTC'));
         } catch (\Exception) {
             $startedAt = $finishedAt;
         }
-        
-        $durationMs = (int) round((((float) $finishedAt->format('U.u')) - ((float) $startedAt->format('U.u'))) * 1000);
+
+        $durationMs = (int) round(((float) $finishedAt->format('U.u') - (float) $startedAt->format('U.u')) * 1000);
         if ($durationMs < 0) {
             $durationMs = 0;
         }
@@ -427,7 +436,7 @@ final class FlowRecorder
         $tokenAttributes = array_keys($token->getAttributes());
 
         // Build trace
-        $trace = [
+        return [
             'started_at' => $startedAt->format('Y-m-d\TH:i:s.u\Z'),
             'finished_at' => $finishedAt->format('Y-m-d\TH:i:s.u\Z'),
             'duration_ms' => $durationMs,
@@ -469,8 +478,6 @@ final class FlowRecorder
             ],
             'checks' => $checks,
         ];
-
-        return $trace;
     }
 
     /**
@@ -508,7 +515,7 @@ final class FlowRecorder
             // Use the recorder-decorated http client
             $response = $this->httpClient->request('GET', $jwksUri);
             $content = $response->getContent(false);
-            
+
             try {
                 $json = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
             } catch (\JsonException) {
@@ -569,18 +576,17 @@ final class FlowRecorder
             $alg = $header['alg'] ?? 'unknown';
             $kid = $header['kid'] ?? 'unknown';
             $kty = $signatureKey['kty'] ?? 'unknown';
-            
+
             $checks[] = [
                 'label' => 'signature',
-                'detail' => sprintf('alg: %s, kid: %s, key type: %s, %s', 
-                    $alg, $kid, $kty, $keySource ?? 'unknown'),
+                'detail' => sprintf('alg: %s, kid: %s, key type: %s, %s', $alg, $kid, $kty, $keySource ?? 'unknown'),
                 'ok' => true,
             ];
         } else {
             $header = $idTokenDecoded['header'] ?? [];
             $alg = $header['alg'] ?? 'unknown';
             $kid = $header['kid'] ?? 'unknown';
-            
+
             $checks[] = [
                 'label' => 'signature',
                 'detail' => sprintf('alg: %s, kid: %s, key type: unknown', $alg, $kid),
@@ -590,7 +596,9 @@ final class FlowRecorder
 
         // iss check
         $issuer = $discoveryConfig['issuer'] ?? '';
-        $idTokenIss = ($idTokenDecoded !== null && isset($idTokenDecoded['payload']['iss'])) ? $idTokenDecoded['payload']['iss'] : '';
+        $idTokenIss = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['iss'])
+            ? $idTokenDecoded['payload']['iss']
+            : '';
         $checks[] = [
             'label' => 'iss',
             'detail' => sprintf('iss: %s, expected: %s', $idTokenIss, $issuer),
@@ -599,18 +607,19 @@ final class FlowRecorder
 
         // aud check
         $clientId = $this->getClientIdForFirewall($firewall);
-        $aud = ($idTokenDecoded !== null && isset($idTokenDecoded['payload']['aud'])) ? $idTokenDecoded['payload']['aud'] : '';
+        $aud = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['aud'])
+            ? $idTokenDecoded['payload']['aud']
+            : '';
         $checks[] = [
             'label' => 'aud',
-            'detail' => sprintf('aud: %s, contains: %s', 
-                (is_array($aud) ? implode(', ', $aud) : $aud), 
-                $clientId
-            ),
+            'detail' => sprintf('aud: %s, contains: %s', is_array($aud) ? implode(', ', $aud) : $aud, $clientId),
             'ok' => true,
         ];
 
         // azp check
-        $azp = ($idTokenDecoded !== null && isset($idTokenDecoded['payload']['azp'])) ? $idTokenDecoded['payload']['azp'] : '';
+        $azp = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['azp'])
+            ? $idTokenDecoded['payload']['azp']
+            : '';
         if ($azp !== '') {
             $checks[] = [
                 'label' => 'azp',
@@ -622,19 +631,28 @@ final class FlowRecorder
         // Time-based checks
         $timeFields = ['exp', 'iat', 'nbf'];
         foreach ($timeFields as $field) {
-            $value = ($idTokenDecoded !== null && isset($idTokenDecoded['payload'][$field])) ? $idTokenDecoded['payload'][$field] : null;
+            $value = $idTokenDecoded !== null && isset($idTokenDecoded['payload'][$field])
+                ? $idTokenDecoded['payload'][$field]
+                : null;
             if (is_int($value)) {
                 $checks[] = [
                     'label' => $field,
-                    'detail' => sprintf('%s: %s, now: %s, allowed drift: %d seconds',
-                        $field, date('c', $value), date('c'), $allowedTimeDrift),
+                    'detail' => sprintf(
+                        '%s: %s, now: %s, allowed drift: %d seconds',
+                        $field,
+                        date('c', $value),
+                        date('c'),
+                        $allowedTimeDrift,
+                    ),
                     'ok' => true,
                 ];
             }
         }
 
         // nonce check
-        $nonce = ($idTokenDecoded !== null && isset($idTokenDecoded['payload']['nonce'])) ? $idTokenDecoded['payload']['nonce'] : '';
+        $nonce = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['nonce'])
+            ? $idTokenDecoded['payload']['nonce']
+            : '';
         $checks[] = [
             'label' => 'nonce',
             'detail' => sprintf('ID token nonce: %s, matched the one sent in the authorization request', $nonce),
@@ -643,21 +661,31 @@ final class FlowRecorder
 
         // auth_time check (only when scenario sets max_age)
         if ($maxAge !== null) {
-            $authTime = ($idTokenDecoded !== null && isset($idTokenDecoded['payload']['auth_time'])) ? $idTokenDecoded['payload']['auth_time'] : null;
+            $authTime = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['auth_time'])
+                ? $idTokenDecoded['payload']['auth_time']
+                : null;
             if (is_int($authTime)) {
                 $checks[] = [
                     'label' => 'auth_time',
-                    'detail' => sprintf('auth_time: %s, max_age: %d seconds, age: %d seconds',
-                        date('c', $authTime), $maxAge, time() - $authTime),
+                    'detail' => sprintf(
+                        'auth_time: %s, max_age: %d seconds, age: %d seconds',
+                        date('c', $authTime),
+                        $maxAge,
+                        time() - $authTime,
+                    ),
                     'ok' => true,
                 ];
             }
         }
 
         // sub check
-        $idTokenSub = ($idTokenDecoded !== null && isset($idTokenDecoded['payload']['sub'])) ? $idTokenDecoded['payload']['sub'] : '';
-        $userInfoSub = ($userBadgeAttributes !== null && isset($userBadgeAttributes['sub'])) ? $userBadgeAttributes['sub'] : '';
-        
+        $idTokenSub = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['sub'])
+            ? $idTokenDecoded['payload']['sub']
+            : '';
+        $userInfoSub = $userBadgeAttributes !== null && isset($userBadgeAttributes['sub'])
+            ? $userBadgeAttributes['sub']
+            : '';
+
         if ('id_token' === $userDataSource) {
             $checks[] = [
                 'label' => 'sub',
@@ -698,7 +726,9 @@ final class FlowRecorder
             'expires_in' => $tokenData['expires_in'] ?? null,
             'scope' => $tokenData['scope'] ?? null,
             'refresh_token_present' => isset($tokenData['refresh_token']),
-            'raw_id_token' => substr($tokenData['id_token'] ?? '', 0, 50) . (isset($tokenData['id_token']) && strlen($tokenData['id_token']) > 50 ? '...' : ''),
+            'raw_id_token' =>
+                substr($tokenData['id_token'] ?? '', 0, 50)
+                    . (isset($tokenData['id_token']) && strlen($tokenData['id_token']) > 50 ? '...' : ''),
             'access_token_length' => isset($tokenData['access_token']) ? strlen($tokenData['access_token']) : 0,
         ];
     }

@@ -6,7 +6,6 @@ use App\Trace\OidcHttpRecorder;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
-use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
  * Unit tests for OidcHttpRecorder.
@@ -34,9 +33,9 @@ class OidcHttpRecorderTest extends TestCase
         $this->recorder->request('GET', 'https://example.com/test', ['headers' => ['Accept' => 'application/json']]);
 
         $exchanges = $this->recorder->getExchanges();
-        
+
         $this->assertCount(1, $exchanges);
-        
+
         $exchange = $exchanges[0];
         $this->assertEquals('GET', $exchange['method']);
         $this->assertEquals('https://example.com/test', $exchange['url']);
@@ -54,7 +53,7 @@ class OidcHttpRecorderTest extends TestCase
         });
 
         $response = $this->recorder->request('GET', 'https://example.com/test');
-        
+
         // Should return a MockResponse instance
         $this->assertInstanceOf(MockResponse::class, $response);
     }
@@ -72,12 +71,12 @@ class OidcHttpRecorderTest extends TestCase
         $this->recorder->request('POST', 'https://example.com/second', ['body' => ['key' => 'value']]);
 
         $exchanges = $this->recorder->getExchanges();
-        
+
         $this->assertCount(2, $exchanges);
-        
+
         $this->assertEquals('GET', $exchanges[0]['method']);
         $this->assertEquals('https://example.com/first', $exchanges[0]['url']);
-        
+
         $this->assertEquals('POST', $exchanges[1]['method']);
         $this->assertEquals('https://example.com/second', $exchanges[1]['url']);
         $this->assertEquals(['body' => ['key' => 'value']], $exchanges[1]['options']);
@@ -93,11 +92,11 @@ class OidcHttpRecorderTest extends TestCase
         });
 
         $this->recorder->request('GET', 'https://example.com/test');
-        
+
         $this->assertCount(1, $this->recorder->getExchanges());
-        
+
         $this->recorder->reset();
-        
+
         $this->assertCount(0, $this->recorder->getExchanges());
     }
 
@@ -111,10 +110,10 @@ class OidcHttpRecorderTest extends TestCase
         });
 
         $recorderWithOptions = $this->recorder->withOptions(['timeout' => 30]);
-        
+
         // Should be a different instance
         $this->assertNotSame($this->recorder, $recorderWithOptions);
-        
+
         // Should be an OidcHttpRecorder
         $this->assertInstanceOf(OidcHttpRecorder::class, $recorderWithOptions);
     }
@@ -129,13 +128,13 @@ class OidcHttpRecorderTest extends TestCase
         });
 
         $recorderWithOptions = $this->recorder->withOptions(['timeout' => 30]);
-        
+
         // Make a request with the new recorder
         $recorderWithOptions->request('GET', 'https://example.com/test');
-        
+
         // The original recorder should still have no exchanges (it's a separate instance)
         $this->assertCount(0, $this->recorder->getExchanges());
-        
+
         // The new recorder should have the exchange
         $exchanges = $recorderWithOptions->getExchanges();
         $this->assertCount(1, $exchanges);
@@ -149,16 +148,17 @@ class OidcHttpRecorderTest extends TestCase
     public function testStreamDelegatesToInnerClient(): void
     {
         $testResponse = new MockResponse('stream data', ['http_code' => 200]);
-        
+
         // Create a recorder with a mock inner client
         $innerClient = $this->createMock(\Symfony\Contracts\HttpClient\HttpClientInterface::class);
-        $innerClient->expects($this->once())
+        $innerClient
+            ->expects($this->once())
             ->method('stream')
             ->with([$testResponse], null)
             ->willReturn($this->createStub(\Symfony\Contracts\HttpClient\ResponseStreamInterface::class));
 
         $recorder = new OidcHttpRecorder($innerClient);
-        
+
         // This should delegate to the inner client - stream expects an array of responses
         $recorder->stream([$testResponse]);
     }
@@ -173,14 +173,14 @@ class OidcHttpRecorderTest extends TestCase
         });
 
         $methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
-        
+
         foreach ($methods as $method) {
             $this->recorder->request($method, 'https://example.com/' . strtolower($method));
         }
 
         $exchanges = $this->recorder->getExchanges();
         $this->assertCount(5, $exchanges);
-        
+
         foreach ($methods as $i => $method) {
             $this->assertEquals($method, $exchanges[$i]['method']);
         }
@@ -205,7 +205,7 @@ class OidcHttpRecorderTest extends TestCase
 
         $exchanges = $this->recorder->getExchanges();
         $this->assertCount(1, $exchanges);
-        
+
         $this->assertEquals($options, $exchanges[0]['options']);
     }
 }

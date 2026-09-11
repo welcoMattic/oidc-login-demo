@@ -51,7 +51,7 @@ final class FirewallConfig
             // Check if this is the next firewall at the same level or a parent level
             $trimmed = ltrim($line);
             $leadingSpaces = strlen($line) - strlen($trimmed);
-            
+
             // If line is blank or has 12+ spaces (child of current firewall), include it
             if ($trimmed === '' || $leadingSpaces >= strlen($childIndent)) {
                 $firewallLines[] = $line;

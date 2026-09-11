@@ -29,7 +29,10 @@ final class Scenarios
                     ['name' => 'scope', 'value' => '[profile, email]'],
                     ['name' => 'token_endpoint_auth_method', 'value' => 'client_secret_post (default)'],
                     ['name' => 'pkce', 'value' => 'enabled: true, method: S256 (default)'],
-                    ['name' => 'id_token_signature', 'value' => 'required: true, algorithms: [RS256], enforce_key_usage_verification: true (default)'],
+                    [
+                        'name' => 'id_token_signature',
+                        'value' => 'required: true, algorithms: [RS256], enforce_key_usage_verification: true (default)',
+                    ],
                     ['name' => 'enable_end_session', 'value' => 'true'],
                 ],
             ],
@@ -76,7 +79,10 @@ final class Scenarios
                     ['name' => 'allowed_time_drift', 'value' => '5'],
                     ['name' => 'discovery_cache_ttl', 'value' => '60'],
                     ['name' => 'authorization_params', 'value' => 'prompt: login, login_hint: alice, ui_locales: fr'],
-                    ['name' => 'id_token_signature', 'value' => 'required: true, algorithms: [RS256], enforce_key_usage_verification: true'],
+                    [
+                        'name' => 'id_token_signature',
+                        'value' => 'required: true, algorithms: [RS256], enforce_key_usage_verification: true',
+                    ],
                     ['name' => 'enable_end_session', 'value' => 'true'],
                 ],
             ],
@@ -162,7 +168,10 @@ final class Scenarios
                 'max_age' => null,
                 'options' => [
                     ['name' => 'check_path', 'value' => 'app_callback_return (a route name)'],
-                    ['name' => 'redirect_uri', 'value' => 'http://localhost:8001/callback/return-from-keycloak (the URL of that route)'],
+                    [
+                        'name' => 'redirect_uri',
+                        'value' => 'http://localhost:8001/callback/return-from-keycloak (the URL of that route)',
+                    ],
                     ['name' => 'enable_end_session', 'value' => 'true'],
                 ],
             ],

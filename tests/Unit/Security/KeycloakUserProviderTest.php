@@ -4,7 +4,6 @@ namespace App\Tests\Unit\Security;
 
 use App\Security\KeycloakUserProvider;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\OidcUser;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -39,7 +38,7 @@ class KeycloakUserProviderTest extends TestCase
 
         $this->assertInstanceOf(OidcUser::class, $user);
         $this->assertEquals('11111111-1111-4111-8111-111111111111', $user->getUserIdentifier());
-        
+
         $roles = $user->getRoles();
         $this->assertContains('ROLE_USER', $roles);
         $this->assertContains('ROLE_ADMIN', $roles);
@@ -89,7 +88,7 @@ class KeycloakUserProviderTest extends TestCase
         $this->assertContains('ROLE_USER', $roles);
         $this->assertContains('ROLE_ADMIN', $roles);
         $this->assertContains('ROLE_EDITOR', $roles);
-        
+
         // The user object should not have a roles claim in its attributes
         // (it was dropped before creating the OidcUser)
     }
@@ -116,7 +115,7 @@ class KeycloakUserProviderTest extends TestCase
     {
         $this->expectException(UserNotFoundException::class);
         $this->expectExceptionMessage('The "sub" claim is required for OIDC authentication.');
-        
+
         $this->provider->loadUserByIdentifier('test-user', []);
     }
 
@@ -127,7 +126,7 @@ class KeycloakUserProviderTest extends TestCase
     {
         $this->expectException(UserNotFoundException::class);
         $this->expectExceptionMessage('The "sub" claim is required for OIDC authentication.');
-        
+
         $this->provider->loadUserByIdentifier('', ['sub' => '']);
     }
 
@@ -138,7 +137,7 @@ class KeycloakUserProviderTest extends TestCase
     {
         $this->expectException(UserNotFoundException::class);
         $this->expectExceptionMessage('The "sub" claim is required for OIDC authentication.');
-        
+
         $this->provider->loadUserByIdentifier('test-user', ['sub' => 123]);
     }
 
@@ -153,9 +152,9 @@ class KeycloakUserProviderTest extends TestCase
         ];
 
         $user = $this->provider->loadUserByIdentifier('11111111-1111-4111-8111-111111111111', $attributes);
-        
+
         $refreshedUser = $this->provider->refreshUser($user);
-        
+
         $this->assertSame($user, $refreshedUser);
     }
 
@@ -165,7 +164,7 @@ class KeycloakUserProviderTest extends TestCase
     public function testRefreshUserRejectsOtherUserClasses(): void
     {
         $this->expectException(\TypeError::class);
-        
+
         $mockUser = new \stdClass();
         $this->provider->refreshUser($mockUser);
     }
