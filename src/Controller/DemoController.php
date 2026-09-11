@@ -13,12 +13,11 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
 
-class DemoController extends AbstractController
+final class DemoController extends AbstractController
 {
     public function __construct(
         private readonly TokenStorageInterface $tokenStorage,
-    ) {
-    }
+    ) {}
 
     #[Route('/', name: 'app_home')]
     public function home(AuthenticationUtils $authenticationUtils): Response
@@ -33,7 +32,9 @@ class DemoController extends AbstractController
         ]);
     }
 
-    #[Route('/{firewall}/account', name: 'app_account', requirements: ['firewall' => 'default|basic|public|strict|es256|plain|roles|email|idtoken|callback'])]
+    #[Route('/{firewall}/account', name: 'app_account', requirements: [
+        'firewall' => 'default|basic|public|strict|es256|plain|roles|email|idtoken|callback',
+    ])]
     public function account(string $firewall, Request $request, ?Profiler $profiler = null): Response
     {
         $token = $this->tokenStorage->getToken();
@@ -65,7 +66,8 @@ class DemoController extends AbstractController
         }
 
         // Check for access token attribute
-        $hasAccessToken = $token?->hasAttribute('oidc_access_token') && is_string($token->getAttribute('oidc_access_token'));
+        $hasAccessToken =
+            $token?->hasAttribute('oidc_access_token') && is_string($token->getAttribute('oidc_access_token'));
 
         // Get firewall configuration YAML
         $firewallYaml = FirewallConfig::getFirewallYaml($firewall);

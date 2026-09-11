@@ -4,9 +4,9 @@ namespace App\Security;
 
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
+use Symfony\Component\Security\Core\User\AttributesBasedUserProviderInterface;
 use Symfony\Component\Security\Core\User\OidcUser;
 use Symfony\Component\Security\Core\User\UserInterface;
-use Symfony\Component\Security\Core\User\AttributesBasedUserProviderInterface;
 
 /**
  * Custom user provider that maps Keycloak realm roles onto Symfony roles.

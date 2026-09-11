@@ -23,8 +23,7 @@ final class OidcHttpRecorder implements HttpClientInterface, ResetInterface
 
     public function __construct(
         private HttpClientInterface $inner,
-    ) {
-    }
+    ) {}
 
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {

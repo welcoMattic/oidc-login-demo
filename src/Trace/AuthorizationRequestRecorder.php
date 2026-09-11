@@ -4,7 +4,6 @@ namespace App\Trace;
 
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RedirectResponse;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 
 /**
@@ -82,7 +81,7 @@ final class AuthorizationRequestRecorder
         }
 
         // Create pending entry with UTC timestamp
-        $startedAt = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i:s.u\Z');
+        $startedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s.u\Z');
 
         // Create pending entry
         $entry = [

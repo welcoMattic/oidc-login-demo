@@ -17,19 +17,19 @@ class JwtDecoderTest extends TestCase
     {
         $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
         $payload = json_encode(['sub' => '1234567890', 'name' => 'John Doe']);
-        
+
         // Create a JWT with base64url encoding
         $headerB64 = $this->base64UrlEncode($header);
         $payloadB64 = $this->base64UrlEncode($payload);
         $signature = $this->base64UrlEncode('test-signature');
-        
+
         $jwt = $headerB64 . '.' . $payloadB64 . '.' . $signature;
-        
+
         $result = JwtDecoder::decode($jwt);
-        
+
         $this->assertArrayHasKey('header', $result);
         $this->assertArrayHasKey('payload', $result);
-        
+
         $this->assertEquals(['alg' => 'RS256', 'typ' => 'JWT'], $result['header']);
         $this->assertEquals(['sub' => '1234567890', 'name' => 'John Doe'], $result['payload']);
     }
@@ -40,18 +40,21 @@ class JwtDecoderTest extends TestCase
     public function testDecodeDifferentContent(): void
     {
         $header = json_encode(['alg' => 'ES256', 'kid' => 'key-1']);
-        $payload = json_encode(['iss' => 'https://example.com', 'exp' => 1234567890, 'iat' => 1234567800]);
-        
+        $payload = json_encode(['iss' => 'https://example.com', 'exp' => 1_234_567_890, 'iat' => 1_234_567_800]);
+
         $headerB64 = $this->base64UrlEncode($header);
         $payloadB64 = $this->base64UrlEncode($payload);
         $signature = $this->base64UrlEncode('test-signature');
-        
+
         $jwt = $headerB64 . '.' . $payloadB64 . '.' . $signature;
-        
+
         $result = JwtDecoder::decode($jwt);
-        
+
         $this->assertEquals(['alg' => 'ES256', 'kid' => 'key-1'], $result['header']);
-        $this->assertEquals(['iss' => 'https://example.com', 'exp' => 1234567890, 'iat' => 1234567800], $result['payload']);
+        $this->assertEquals(
+            ['iss' => 'https://example.com', 'exp' => 1_234_567_890, 'iat' => 1_234_567_800],
+            $result['payload'],
+        );
     }
 
     /**
@@ -61,7 +64,7 @@ class JwtDecoderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid JWT format: expected 3 parts separated by dots.');
-        
+
         JwtDecoder::decode('invalid-token');
     }
 
@@ -72,7 +75,7 @@ class JwtDecoderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid JWT format: expected 3 parts separated by dots.');
-        
+
         JwtDecoder::decode('header.payload');
     }
 
@@ -83,7 +86,7 @@ class JwtDecoderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Failed to decode JWT part: invalid base64 encoding.');
-        
+
         // Use invalid base64 for header
         $jwt = 'invalid!base64.' . $this->base64UrlEncode('{}') . '.' . $this->base64UrlEncode('{}');
         JwtDecoder::decode($jwt);
@@ -96,7 +99,7 @@ class JwtDecoderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Failed to decode JWT part: invalid base64 encoding.');
-        
+
         // Use invalid base64 for payload
         $jwt = $this->base64UrlEncode('{}') . '.invalid!base64.' . $this->base64UrlEncode('{}');
         JwtDecoder::decode($jwt);
@@ -109,9 +112,14 @@ class JwtDecoderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Failed to decode JWT part: invalid JSON.');
-        
+
         // Use invalid JSON for header
-        $jwt = $this->base64UrlEncode('not json') . '.' . $this->base64UrlEncode('{}') . '.' . $this->base64UrlEncode('{}');
+        $jwt =
+            $this->base64UrlEncode('not json')
+            . '.'
+            . $this->base64UrlEncode('{}')
+            . '.'
+            . $this->base64UrlEncode('{}');
         JwtDecoder::decode($jwt);
     }
 
@@ -122,9 +130,14 @@ class JwtDecoderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Failed to decode JWT part: invalid JSON.');
-        
+
         // Use invalid JSON for payload
-        $jwt = $this->base64UrlEncode('{}') . '.' . $this->base64UrlEncode('not json') . '.' . $this->base64UrlEncode('{}');
+        $jwt =
+            $this->base64UrlEncode('{}')
+            . '.'
+            . $this->base64UrlEncode('not json')
+            . '.'
+            . $this->base64UrlEncode('{}');
         JwtDecoder::decode($jwt);
     }
 
@@ -135,7 +148,7 @@ class JwtDecoderTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Failed to decode JWT part: invalid JSON.');
-        
+
         // Use empty object for header which should be valid, but let's test with invalid JSON
         $jwt = $this->base64UrlEncode('') . '.' . $this->base64UrlEncode('{}') . '.' . $this->base64UrlEncode('{}');
         JwtDecoder::decode($jwt);
@@ -147,9 +160,9 @@ class JwtDecoderTest extends TestCase
     public function testEmptyParts(): void
     {
         $jwt = $this->base64UrlEncode('{}') . '.' . $this->base64UrlEncode('{}') . '.' . $this->base64UrlEncode('{}');
-        
+
         $result = JwtDecoder::decode($jwt);
-        
+
         $this->assertEquals([], $result['header']);
         $this->assertEquals([], $result['payload']);
     }
@@ -172,15 +185,15 @@ class JwtDecoderTest extends TestCase
                 ],
             ],
         ]);
-        
+
         $headerB64 = $this->base64UrlEncode($header);
         $payloadB64 = $this->base64UrlEncode($payload);
         $signature = $this->base64UrlEncode('test-signature');
-        
+
         $jwt = $headerB64 . '.' . $payloadB64 . '.' . $signature;
-        
+
         $result = JwtDecoder::decode($jwt);
-        
+
         $expectedPayload = [
             'sub' => '1234567890',
             'name' => 'John Doe',
@@ -193,7 +206,7 @@ class JwtDecoderTest extends TestCase
                 ],
             ],
         ];
-        
+
         $this->assertEquals($expectedPayload, $result['payload']);
     }
 

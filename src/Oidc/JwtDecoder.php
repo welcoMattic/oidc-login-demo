@@ -39,7 +39,7 @@ final class JwtDecoder
     {
         // Convert base64url to base64
         $base64 = strtr($part, '-_', '+/');
-        
+
         // Add padding if necessary
         $padLength = 4 - (strlen($base64) % 4);
         if ($padLength < 4) {
@@ -47,13 +47,13 @@ final class JwtDecoder
         }
 
         $decoded = base64_decode($base64, true);
-        
+
         if ($decoded === false) {
             throw new \InvalidArgumentException('Failed to decode JWT part: invalid base64 encoding.');
         }
 
         $data = json_decode($decoded, true);
-        
+
         if (!is_array($data)) {
             throw new \InvalidArgumentException('Failed to decode JWT part: invalid JSON.');
         }

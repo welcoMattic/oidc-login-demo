@@ -2,14 +2,13 @@
 
 namespace App\Tests\Oidc;
 
-use Jose\Component\Signature\Algorithm\RS256;
+use Jose\Component\Core\AlgorithmManager;
+use Jose\Component\Core\Util\JsonConverter;
 use Jose\Component\Signature\Algorithm\ES256;
 use Jose\Component\Signature\Algorithm\PS256;
-use Jose\Component\Core\Util\JsonConverter;
-use Jose\Component\Signature\Serializer\CompactSerializer;
-use Jose\Component\Core\AlgorithmManager;
+use Jose\Component\Signature\Algorithm\RS256;
 use Jose\Component\Signature\JWSBuilder;
-use Jose\Component\Signature\Serializer\JWSSerializerManager;
+use Jose\Component\Signature\Serializer\CompactSerializer;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
@@ -117,7 +116,10 @@ final class FakeKeycloak
 
         // Handle authorization endpoint (should not be called directly by the app)
         if (str_contains($path, 'protocol/openid-connect/auth') || $this->isAuthorizationEndpoint($url)) {
-            return new MockResponse('', ['http_code' => 501, 'reason_phrase' => 'Authorization endpoint should not be called directly']);
+            return new MockResponse('', [
+                'http_code' => 501,
+                'reason_phrase' => 'Authorization endpoint should not be called directly',
+            ]);
         }
 
         // Default: return 501 with the URL in the body
@@ -131,9 +133,9 @@ final class FakeKeycloak
     {
         $parsedUrl = parse_url($url);
         $query = $parsedUrl['query'] ?? '';
-        
+
         parse_str($query, $params);
-        
+
         $this->lastAuthorizationRequest = [
             'url' => $url,
             'params' => $params,
@@ -157,13 +159,15 @@ final class FakeKeycloak
     public function issueCode(): string
     {
         if (null === $this->lastAuthorizationRequest) {
-            throw new \LogicException('Authorization request must be set via expectAuthorization() before issuing a code.');
+            throw new \LogicException(
+                'Authorization request must be set via expectAuthorization() before issuing a code.',
+            );
         }
 
         $code = 'auth-code-' . ++$this->codeCounter . '-' . bin2hex(random_bytes(8));
-        
+
         $this->issuedCodes[$code] = $this->lastAuthorizationRequest;
-        
+
         return $code;
     }
 
@@ -254,7 +258,7 @@ final class FakeKeycloak
     private function createJwksResponse(): MockResponse
     {
         $jwks = TestKeys::jwks();
-        
+
         return new MockResponse(json_encode($jwks), [
             'http_code' => 200,
             'header' => ['Content-Type: application/json'],
@@ -267,15 +271,18 @@ final class FakeKeycloak
     private function createTokenResponse(string $method, array $options): MockResponse
     {
         if ($method !== 'POST') {
-            return new MockResponse(json_encode(['error' => 'invalid_request', 'error_description' => 'Method must be POST']), [
-                'http_code' => 400,
-                'header' => ['Content-Type: application/json'],
-            ]);
+            return new MockResponse(
+                json_encode(['error' => 'invalid_request', 'error_description' => 'Method must be POST']),
+                [
+                    'http_code' => 400,
+                    'header' => ['Content-Type: application/json'],
+                ],
+            );
         }
 
         // Parse the request body
         $body = $options['body'] ?? '';
-        
+
         if (is_array($body)) {
             $params = $body;
         } else {
@@ -288,13 +295,19 @@ final class FakeKeycloak
         // Extract authorization header
         $authHeader = $options['normalized_headers']['authorization'][0] ?? null;
         $authBasic = $options['auth_basic'] ?? null;
-        
+
         // Check grant type
         if (($params['grant_type'] ?? null) !== 'authorization_code') {
-            return new MockResponse(json_encode(['error' => 'unsupported_grant_type', 'error_description' => 'Only authorization_code is supported']), [
-                'http_code' => 400,
-                'header' => ['Content-Type: application/json'],
-            ]);
+            return new MockResponse(
+                json_encode([
+                    'error' => 'unsupported_grant_type',
+                    'error_description' => 'Only authorization_code is supported',
+                ]),
+                [
+                    'http_code' => 400,
+                    'header' => ['Content-Type: application/json'],
+                ],
+            );
         }
 
         $code = $params['code'] ?? null;
@@ -304,44 +317,56 @@ final class FakeKeycloak
 
         // Validate the authorization code
         if (!isset($this->issuedCodes[$code])) {
-            return new MockResponse(json_encode(['error' => 'invalid_grant', 'error_description' => 'Invalid authorization code']), [
-                'http_code' => 400,
-                'header' => ['Content-Type: application/json'],
-            ]);
+            return new MockResponse(
+                json_encode(['error' => 'invalid_grant', 'error_description' => 'Invalid authorization code']),
+                [
+                    'http_code' => 400,
+                    'header' => ['Content-Type: application/json'],
+                ],
+            );
         }
 
         $authorizationRequest = $this->issuedCodes[$code];
-        
+
         // Validate redirect URI matches the authorization request
         if ($redirectUri !== $authorizationRequest['redirect_uri']) {
-            return new MockResponse(json_encode(['error' => 'invalid_grant', 'error_description' => 'redirect_uri mismatch']), [
-                'http_code' => 400,
-                'header' => ['Content-Type: application/json'],
-            ]);
+            return new MockResponse(
+                json_encode(['error' => 'invalid_grant', 'error_description' => 'redirect_uri mismatch']),
+                [
+                    'http_code' => 400,
+                    'header' => ['Content-Type: application/json'],
+                ],
+            );
         }
 
         // Validate client authentication
         $expectedClientId = $authorizationRequest['client_id'];
         $isPublicClient = false;
-        
+
         if (str_ends_with($expectedClientId, '-test')) {
             $baseClientId = substr($expectedClientId, 0, -5); // Remove '-test'
-            
+
             // Check for public client (no secret)
             if ($baseClientId === 'symfony-demo-public') {
                 $isPublicClient = true;
-                
+
                 // Public clients must not send any authentication
                 if (($params['client_secret'] ?? null) !== null || $authBasic !== null || $authHeader !== null) {
-                    return new MockResponse(json_encode(['error' => 'invalid_client', 'error_description' => 'Public client must not send client_secret']), [
-                        'http_code' => 400,
-                        'header' => ['Content-Type: application/json'],
-                    ]);
+                    return new MockResponse(
+                        json_encode([
+                            'error' => 'invalid_client',
+                            'error_description' => 'Public client must not send client_secret',
+                        ]),
+                        [
+                            'http_code' => 400,
+                            'header' => ['Content-Type: application/json'],
+                        ],
+                    );
                 }
             } else {
                 // Confidential clients must authenticate
                 $hasValidAuth = false;
-                
+
                 // Check for client_secret in body
                 if (isset($params['client_secret'])) {
                     $clientSecret = $params['client_secret'];
@@ -350,7 +375,7 @@ final class FakeKeycloak
                         $hasValidAuth = true;
                     }
                 }
-                
+
                 // Check for HTTP Basic
                 if ($authBasic !== null) {
                     // auth_basic is passed as ['username' => 'client_id', 'password' => 'client_secret']
@@ -365,7 +390,7 @@ final class FakeKeycloak
                         }
                     }
                 }
-                
+
                 // Check Authorization header
                 $basicCredentials = self::authorizationCredentials($options, 'Basic');
                 if ($basicCredentials !== null) {
@@ -384,12 +409,18 @@ final class FakeKeycloak
                         }
                     }
                 }
-                
+
                 if (!$hasValidAuth) {
-                    return new MockResponse(json_encode(['error' => 'invalid_client', 'error_description' => 'Invalid client authentication']), [
-                        'http_code' => 401,
-                        'header' => ['Content-Type: application/json'],
-                    ]);
+                    return new MockResponse(
+                        json_encode([
+                            'error' => 'invalid_client',
+                            'error_description' => 'Invalid client authentication',
+                        ]),
+                        [
+                            'http_code' => 401,
+                            'header' => ['Content-Type: application/json'],
+                        ],
+                    );
                 }
             }
         }
@@ -397,30 +428,45 @@ final class FakeKeycloak
         // Validate PKCE
         $codeChallengeMethod = $authorizationRequest['code_challenge_method'] ?? null;
         $codeChallenge = $authorizationRequest['code_challenge'] ?? null;
-        
+
         if ($codeChallengeMethod !== null && $codeChallenge !== null) {
             if ($codeVerifier === null) {
-                return new MockResponse(json_encode(['error' => 'invalid_grant', 'error_description' => 'Missing code_verifier']), [
-                    'http_code' => 400,
-                    'header' => ['Content-Type: application/json'],
-                ]);
+                return new MockResponse(
+                    json_encode(['error' => 'invalid_grant', 'error_description' => 'Missing code_verifier']),
+                    [
+                        'http_code' => 400,
+                        'header' => ['Content-Type: application/json'],
+                    ],
+                );
             }
 
             if ($codeChallengeMethod === 'S256') {
                 // RFC 7636, Section 4.2: BASE64URL(SHA256(code_verifier)) without padding
                 $expectedChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
                 if (!hash_equals($expectedChallenge, $codeChallenge)) {
-                    return new MockResponse(json_encode(['error' => 'invalid_grant', 'error_description' => 'PKCE code_verifier does not match code_challenge']), [
-                        'http_code' => 400,
-                        'header' => ['Content-Type: application/json'],
-                    ]);
+                    return new MockResponse(
+                        json_encode([
+                            'error' => 'invalid_grant',
+                            'error_description' => 'PKCE code_verifier does not match code_challenge',
+                        ]),
+                        [
+                            'http_code' => 400,
+                            'header' => ['Content-Type: application/json'],
+                        ],
+                    );
                 }
             } elseif ($codeChallengeMethod === 'plain') {
                 if (!hash_equals($codeVerifier, $codeChallenge)) {
-                    return new MockResponse(json_encode(['error' => 'invalid_grant', 'error_description' => 'PKCE code_verifier does not match code_challenge']), [
-                        'http_code' => 400,
-                        'header' => ['Content-Type: application/json'],
-                    ]);
+                    return new MockResponse(
+                        json_encode([
+                            'error' => 'invalid_grant',
+                            'error_description' => 'PKCE code_verifier does not match code_challenge',
+                        ]),
+                        [
+                            'http_code' => 400,
+                            'header' => ['Content-Type: application/json'],
+                        ],
+                    );
                 }
             }
         }
@@ -433,7 +479,7 @@ final class FakeKeycloak
 
         // Determine which key to sign with based on client_id
         $signingKeyPair = $this->getSigningKeyForClient($expectedClientId);
-        
+
         if ($this->customSigningKey !== null) {
             $signingKeyPair = [
                 'private_key' => $this->customSigningKey,
@@ -507,33 +553,43 @@ final class FakeKeycloak
     private function createUserInfoResponse(string $method, array $options): MockResponse
     {
         if ($method !== 'GET') {
-            return new MockResponse(json_encode(['error' => 'invalid_request', 'error_description' => 'Method must be GET']), [
-                'http_code' => 400,
-                'header' => ['Content-Type: application/json'],
-            ]);
+            return new MockResponse(
+                json_encode(['error' => 'invalid_request', 'error_description' => 'Method must be GET']),
+                [
+                    'http_code' => 400,
+                    'header' => ['Content-Type: application/json'],
+                ],
+            );
         }
 
         // Check for Authorization header
         $authHeader = $options['normalized_headers']['authorization'][0] ?? null;
         $authBearer = $options['auth_bearer'] ?? null;
-        
+
         if ($authBearer === null && $authHeader === null) {
-            return new MockResponse(json_encode(['error' => 'invalid_request', 'error_description' => 'Missing Authorization header']), [
-                'http_code' => 401,
-                'header' => ['Content-Type: application/json'],
-            ]);
+            return new MockResponse(
+                json_encode(['error' => 'invalid_request', 'error_description' => 'Missing Authorization header']),
+                [
+                    'http_code' => 401,
+                    'header' => ['Content-Type: application/json'],
+                ],
+            );
         }
 
         // Extract the access token from the Authorization header
-        $accessToken = self::authorizationCredentials($options, 'Bearer') ?? (is_string($authBearer) ? $authBearer : null);
+        $accessToken =
+            self::authorizationCredentials($options, 'Bearer') ?? (is_string($authBearer) ? $authBearer : null);
 
         // Check if this access token was issued by us
         // For simplicity, we accept any token that starts with 'access-token-'
         if ($accessToken === null || !str_starts_with($accessToken, 'access-token-')) {
-            return new MockResponse(json_encode(['error' => 'invalid_token', 'error_description' => 'Invalid access token']), [
-                'http_code' => 401,
-                'header' => ['Content-Type: application/json'],
-            ]);
+            return new MockResponse(
+                json_encode(['error' => 'invalid_token', 'error_description' => 'Invalid access token']),
+                [
+                    'http_code' => 401,
+                    'header' => ['Content-Type: application/json'],
+                ],
+            );
         }
 
         // Return user info
@@ -570,9 +626,9 @@ final class FakeKeycloak
 
         // Determine the algorithm based on the key
         $alg = $privateKey->get('alg', 'RS256');
-        
+
         $jwsBuilder = new JWSBuilder($algorithmManager);
-        
+
         // Build the JWS with the claims as payload
         $jws = $jwsBuilder
             ->create()
@@ -677,7 +733,7 @@ final class FakeKeycloak
     private static function authorizationCredentials(array $options, string $scheme): ?string
     {
         foreach ($options['normalized_headers']['authorization'] ?? [] as $line) {
-            if (preg_match('/^Authorization:\s*'.$scheme.'\s+(\S+)$/i', (string) $line, $m)) {
+            if (preg_match('/^Authorization:\s*' . $scheme . '\s+(\S+)$/i', (string) $line, $m)) {
                 return $m[1];
             }
         }
