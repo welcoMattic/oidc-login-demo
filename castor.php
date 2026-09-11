@@ -119,6 +119,33 @@ function test(): void
     run('php bin/phpunit');
 }
 
+#[AsTask(description: 'Check formatting, lint and analyze the code with Mago')]
+function qa(): void
+{
+    $failed = false;
+
+    foreach (['fmt --check', 'lint', 'analyze'] as $command) {
+        io()->section("mago {$command}");
+
+        if (exit_code("vendor/bin/mago {$command}") !== 0) {
+            $failed = true;
+        }
+    }
+
+    if ($failed) {
+        io()->error('QA checks failed');
+        exit(1);
+    }
+
+    io()->success('QA checks passed');
+}
+
+#[AsTask(description: 'Format the code with Mago')]
+function fmt(): void
+{
+    run('vendor/bin/mago fmt');
+}
+
 #[AsTask(description: 'Clear caches')]
 function cc(): void
 {

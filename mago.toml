@@ -1,0 +1,31 @@
+php-version = "8.4"
+
+[source]
+paths = ["src", "tests"]
+includes = ["vendor"]
+
+[linter]
+integrations = ["symfony", "phpunit"]
+baseline = "linter-baseline.toml"
+
+[linter.rules]
+# Project conventions: Symfony style, no strict_types declaration
+assertion-style = { style = "this" }
+strict-types = { enabled = false }
+no-isset = { enabled = false }
+literal-named-argument = { enabled = false }
+no-else-clause = { enabled = false }
+prefer-arrow-function = { enabled = false }
+prefer-static-closure = { enabled = false }
+prefer-early-continue = { enabled = false }
+# Size metrics: the flow recorder and the fake provider are large on purpose
+cyclomatic-complexity = { enabled = false }
+kan-defect = { enabled = false }
+halstead = { enabled = false }
+too-many-methods = { enabled = false }
+too-many-properties = { enabled = false }
+excessive-parameter-list = { enabled = false }
+excessive-nesting = { enabled = false }
+
+[analyzer]
+baseline = "analyzer-baseline.toml"
