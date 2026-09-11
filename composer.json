@@ -79,6 +79,7 @@
         }
     },
     "require-dev": {
+        "carthage-software/mago": "^1.48.1",
         "phpunit/phpunit": "^13.2",
         "symfony/browser-kit": "8.2.*",
         "symfony/css-selector": "8.2.*",

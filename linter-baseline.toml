@@ -1,0 +1,85 @@
+variant = "loose"
+
+[[issues]]
+file = "src/Controller/DemoController.php"
+code = "no-empty-catch-clause"
+message = "Do not use empty `catch` blocks."
+count = 1
+
+[[issues]]
+file = "src/Demo/FirewallConfig.php"
+code = "no-empty"
+message = "Use of the `empty` construct."
+count = 1
+
+[[issues]]
+file = "src/Trace/FlowRecorder.php"
+code = "no-empty"
+message = "Use of the `empty` construct."
+count = 1
+
+[[issues]]
+file = "src/Trace/FlowRecorder.php"
+code = "no-empty-catch-clause"
+message = "Do not use empty `catch` blocks."
+count = 1
+
+[[issues]]
+file = "src/Trace/FlowRecorder.php"
+code = "no-insecure-comparison"
+message = "Insecure comparison of sensitive data."
+count = 2
+
+[[issues]]
+file = "tests/Functional/LoginFlowTest.php"
+code = "no-insecure-comparison"
+message = "Insecure comparison of sensitive data."
+count = 2
+
+[[issues]]
+file = "tests/Functional/LoginFlowTest.php"
+code = "strict-assertions"
+message = "Use strict assertions in PHPUnit tests."
+count = 9
+
+[[issues]]
+file = "tests/Functional/LogoutTest.php"
+code = "strict-assertions"
+message = "Use strict assertions in PHPUnit tests."
+count = 3
+
+[[issues]]
+file = "tests/Functional/RoutesTest.php"
+code = "no-literal-password"
+message = "Literal passwords or sensitive data should not be stored in code."
+count = 1
+
+[[issues]]
+file = "tests/Functional/RoutesTest.php"
+code = "strict-assertions"
+message = "Use strict assertions in PHPUnit tests."
+count = 6
+
+[[issues]]
+file = "tests/Oidc/FakeKeycloak.php"
+code = "no-insecure-comparison"
+message = "Insecure comparison of sensitive data."
+count = 3
+
+[[issues]]
+file = "tests/Oidc/FakeKeycloak.php"
+code = "strict-behavior"
+message = "Call to `base64_decode` must enforce strict comparison."
+count = 1
+
+[[issues]]
+file = "tests/Unit/Security/KeycloakUserProviderTest.php"
+code = "strict-assertions"
+message = "Use strict assertions in PHPUnit tests."
+count = 2
+
+[[issues]]
+file = "tests/Unit/Trace/OidcHttpRecorderTest.php"
+code = "strict-assertions"
+message = "Use strict assertions in PHPUnit tests."
+count = 8

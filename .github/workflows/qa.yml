@@ -1,0 +1,34 @@
+name: QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  mago:
+    name: Mago
+    runs-on: ubuntu-latest
+    env:
+      # vendor/bin/mago downloads the binary from GitHub releases on first run
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - run: composer install --no-interaction --no-progress --no-scripts
+
+      - name: Format
+        run: vendor/bin/mago fmt --check
+
+      - name: Lint
+        if: success() || failure()
+        run: vendor/bin/mago lint
+
+      - name: Analyze
+        if: success() || failure()
+        run: vendor/bin/mago analyze

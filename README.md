@@ -24,6 +24,8 @@ Other tasks:
 | `castor check` | Lint the container, YAML and Twig, list firewalls and callback routes |
 | `castor smoke` | Browserless login through Keycloak for each scenario and verify the result |
 | `castor test` | Run PHPUnit without Docker (fake provider at HTTP transport level) |
+| `castor qa` | Check formatting, lint and analyze the code with [Mago](https://mago.carthage.software) |
+| `castor fmt` | Format the code with Mago |
 | `castor cc` | Clear caches (container and HTTP cache pool) |
 | `castor logs` | Follow Keycloak logs |
 | `castor open` | Open the app and the Keycloak admin console in the browser |
@@ -165,7 +167,7 @@ RP-Initiated Logout is implemented by the core `OidcEndSessionListener` which re
 ## Layout
 
 ```
-castor.php                                    Castor tasks (install, start, stop, smoke, test, cc, logs, open, restart, clean)
+castor.php                                    Castor tasks (install, start, stop, smoke, test, qa, fmt, cc, logs, open, restart, clean)
 compose.yaml                                  Docker Compose with Keycloak 26.7
 config/packages/security.yaml                Ten oidc_login firewalls, one scenario each
 config/packages/http_client.yaml             Trusts the demo certificate for HTTPS to localhost:8443
@@ -176,6 +178,8 @@ src/Demo/Scenarios.php                        Catalogue of scenarios and their m
 src/Security/KeycloakUserProvider.php          Maps Keycloak realm roles onto Symfony roles
 src/Trace/*                                   Records and displays the flow trace on the account page
 tests/                                       PHPUnit suite with a fake provider at HTTP transport level
+mago.toml                                     Mago configuration, with linter-baseline.toml and analyzer-baseline.toml for the pre-existing findings
+.github/workflows/qa.yml                      CI: Mago format check, lint and analysis
 bin/smoke.sh                                  Browserless end-to-end login against real Keycloak
 ```
 
