@@ -1,4 +1,10 @@
 security:
+    # How long an interactive authentication keeps granting IS_AUTHENTICATED_VERY_RECENTLY
+    # (default 300 seconds), shortened so that the "reauth" scenario asks for the password
+    # again one minute after it was last typed. IS_AUTHENTICATED_RECENTLY has its own
+    # recent_authentication_lifetime (default 7200 seconds).
+    very_recent_authentication_lifetime: 60
+
     providers:
         # Shipped with the OIDC login feature: it builds a self-contained OidcUser from
         # the claims collected during authentication, and hands it back unchanged when the
@@ -21,7 +27,7 @@ security:
             pattern: ^/(_profiler|_wdt|assets|build)/
             security: false
 
-        # Ten oidc_login firewalls, one scenario each, all against the same Keycloak realm.
+        # Fifteen oidc_login firewalls, one scenario each, all against the same Keycloak realm.
         # Each one lives under its own URL prefix (pattern) so the routes, the start
         # flow and the callback do not clash.
 
@@ -403,6 +409,180 @@ security:
                 path: /email/logout
                 target: /
 
+        # The access token stays fresh: the refresh token grant renews it shortly before it
+        # expires. Keycloak issues a refresh token to every confidential client, and the
+        # symfony-demo-refresh client shortens its access token lifespan to 60 seconds, so
+        # the renewal is visible within a minute of logging in.
+        refresh:
+            pattern: ^/refresh
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_REFRESH_CLIENT_ID)%'
+                client_authentication:
+                    client_secret_post: '%env(OIDC_REFRESH_CLIENT_SECRET)%'
+                check_path: /refresh/callback
+                start_path: /refresh/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /refresh/account
+                failure_path: /
+                scope: [profile, email]
+
+                # A firewall listener renews the access token on the first request made less
+                # than "leeway" seconds before it expires: the security token then holds the new
+                # access token, its expiry, and the new refresh token and ID token when the
+                # provider rotated them. A provider that no longer honors the refresh token
+                # (invalid_grant) logs the user out. Keycloak answers without the offline_access
+                # scope, which only a provider requiring it has to be asked for.
+                refresh_access_token:
+                    enabled: true
+                    leeway: 30
+
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /refresh/logout
+                target: /
+
+        # The client authenticates at the token endpoint with a short-lived JWT it signs
+        # with its secret (HS256), the client_secret_jwt method of OIDC Core 1.0, Section 9:
+        # the secret never travels, only the assertion does, and it is valid for 60 seconds.
+        secretjwt:
+            pattern: ^/secretjwt
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_JWT_CLIENT_ID)%'
+
+                # The secret keys the HMAC, so it must be at least as long as the digest:
+                # 32 bytes for HS256. The provider holds the same secret, which is why
+                # private_key_jwt (below) is the stronger of the two.
+                client_authentication:
+                    client_secret_jwt:
+                        secret: '%env(OIDC_JWT_CLIENT_SECRET)%'
+                        algorithm: HS256
+                        lifetime: 60
+
+                check_path: /secretjwt/callback
+                start_path: /secretjwt/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /secretjwt/account
+                failure_path: /
+                scope: [profile, email]
+
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /secretjwt/logout
+                target: /
+
+        # The client authenticates at the token endpoint with a JWT signed by its own private
+        # key (ES256), the private_key_jwt method of OIDC Core 1.0, Section 9, the one FAPI 2.0
+        # asks for. Keycloak only holds the public half, registered as the JWKS of the
+        # symfony-demo-pkjwt client: nothing it stores lets anyone authenticate as this client.
+        privatekeyjwt:
+            pattern: ^/privatekeyjwt
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_PKJWT_CLIENT_ID)%'
+
+                # The key is a JSON-encoded private JWK; its "kid" goes in the assertion header
+                # so that the provider knows which registered public key verifies it.
+                client_authentication:
+                    private_key_jwt:
+                        key: '%env(OIDC_PKJWT_CLIENT_KEY)%'
+                        algorithm: ES256
+
+                check_path: /privatekeyjwt/callback
+                start_path: /privatekeyjwt/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /privatekeyjwt/account
+                failure_path: /
+                scope: [profile, email]
+
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /privatekeyjwt/logout
+                target: /
+
+        # Re-authentication before a sensitive action. /reauth/sensitive requires
+        # IS_AUTHENTICATED_VERY_RECENTLY, granted while the last proof of the user's identity
+        # is younger than very_recent_authentication_lifetime (60 seconds, set at the top of
+        # this file). The proof time is the auth_time claim of the ID token, the moment
+        # Keycloak actually checked the password, not the moment this application logged the
+        # user in: a login answered from an existing Keycloak session carries the older time.
+        # Once it is stale, the denial does not end on a 403: the authenticator is the
+        # re-authentication entry point of the firewall (re_authentication_entry_point defaults
+        # to it), and it sends the user back to Keycloak with prompt=login and the current ID
+        # token as id_token_hint, then back to the page that was denied.
+        reauth:
+            pattern: ^/reauth
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_CLIENT_ID)%'
+                client_authentication:
+                    client_secret_post: '%env(OIDC_CLIENT_SECRET)%'
+                check_path: /reauth/callback
+                start_path: /reauth/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /reauth/account
+                failure_path: /
+                scope: [profile, email]
+
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /reauth/logout
+                target: /
+
+        # The authorization request tailored per request: App\Security\LoginHintListener
+        # listens to OidcAuthorizationRequestEvent and adds a login_hint taken from the query
+        # string (/hint/start?login_hint=bob prefills the Keycloak username field) and the
+        # ui_locales the browser prefers. authorization_params stays for what is static;
+        # the event is for what depends on the request.
+        hint:
+            pattern: ^/hint
+            provider: oidc
+            oidc_login:
+                provider_uri: '%env(OIDC_PROVIDER_URI)%'
+                client_id: '%env(OIDC_CLIENT_ID)%'
+                client_authentication:
+                    client_secret_post: '%env(OIDC_CLIENT_SECRET)%'
+                check_path: /hint/callback
+                start_path: /hint/start
+
+                # Where a successful login lands, and where a failed one goes. failure_path
+                # matters: it defaults to login_path (/login), which this application does not
+                # have, so a failure would end on a 404 instead of the home page and its banner.
+                default_target_path: /hint/account
+                failure_path: /
+                scope: [profile, email]
+
+                # The static part, which the listener receives and may change.
+                authorization_params:
+                    prompt: login
+
+                enable_end_session: true
+                post_logout_redirect_path: /
+            logout:
+                path: /hint/logout
+                target: /
+
         # Public catch-all: the scenario catalogue and anything outside a scenario prefix.
         main:
             lazy: true
@@ -421,6 +601,11 @@ security:
         - { path: ^/email/(start|callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/idtoken/(start|callback)$, roles: PUBLIC_ACCESS }
         - { path: ^/callback/(start|return-from-keycloak)$, roles: PUBLIC_ACCESS }
+        - { path: ^/refresh/(start|callback)$, roles: PUBLIC_ACCESS }
+        - { path: ^/secretjwt/(start|callback)$, roles: PUBLIC_ACCESS }
+        - { path: ^/privatekeyjwt/(start|callback)$, roles: PUBLIC_ACCESS }
+        - { path: ^/reauth/(start|callback)$, roles: PUBLIC_ACCESS }
+        - { path: ^/hint/(start|callback)$, roles: PUBLIC_ACCESS }
 
         # Requiring a role here is what triggers the redirect to the provider: the
         # entry point of an oidc_login firewall always redirects straight to it.
@@ -434,3 +619,10 @@ security:
         - { path: ^/email, roles: ROLE_USER }
         - { path: ^/idtoken, roles: ROLE_USER }
         - { path: ^/callback, roles: ROLE_USER }
+        - { path: ^/refresh, roles: ROLE_USER }
+        - { path: ^/secretjwt, roles: ROLE_USER }
+        - { path: ^/privatekeyjwt, roles: ROLE_USER }
+        # /reauth/sensitive additionally requires IS_AUTHENTICATED_VERY_RECENTLY, through the
+        # #[IsGranted] attribute of its controller (App\Controller\ReauthController)
+        - { path: ^/reauth, roles: ROLE_USER }
+        - { path: ^/hint, roles: ROLE_USER }

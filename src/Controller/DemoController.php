@@ -33,7 +33,7 @@ final class DemoController extends AbstractController
     }
 
     #[Route('/{firewall}/account', name: 'app_account', requirements: [
-        'firewall' => 'default|basic|public|strict|es256|plain|roles|email|idtoken|callback',
+        'firewall' => 'default|basic|public|strict|es256|plain|roles|email|idtoken|callback|refresh|secretjwt|privatekeyjwt|reauth|hint',
     ])]
     public function account(string $firewall, Request $request, ?Profiler $profiler = null): Response
     {

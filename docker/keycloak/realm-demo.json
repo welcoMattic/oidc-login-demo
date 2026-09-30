@@ -159,6 +159,125 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "symfony-demo-refresh",
+      "name": "Symfony OIDC demo (refresh token grant)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "symfony-demo-refresh-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8001"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8001/*",
+        "access.token.lifespan": "60"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-userinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "symfony-demo-jwt",
+      "name": "Symfony OIDC demo (client_secret_jwt)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret-jwt",
+      "secret": "symfony-demo-jwt-secret-at-least-32-bytes-long",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8001"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8001/*",
+        "token.endpoint.auth.signing.alg": "HS256"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-userinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "symfony-demo-pkjwt",
+      "name": "Symfony OIDC demo (private_key_jwt)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-jwt",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8001"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8001/*",
+        "token.endpoint.auth.signing.alg": "ES256",
+        "use.jwks.url": "false",
+        "use.jwks.string": "true",
+        "jwks.string": "{\"keys\":[{\"kid\":\"symfony-demo-client-2026\",\"use\":\"sig\",\"alg\":\"ES256\",\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"gCi_Sux_ZQRyZMZ97vHjv_qxu_2z3qbIqRV9oQ4rlXk\",\"y\":\"oMXpQOlWKdl8TV-yzXTGSEMLHGBTbA72Sq-KNfeB1-8\"}]}"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles-userinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "users": [

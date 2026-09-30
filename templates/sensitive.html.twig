@@ -1,0 +1,30 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Sensitive page - Symfony 8.2 oidc_login{% endblock %}
+
+{% block body %}
+<main>
+    <div class="hero">
+        <p class="eyebrow">reauth scenario</p>
+        <h1>Sensitive page</h1>
+        <p class="lead">This page requires <code>IS_AUTHENTICATED_VERY_RECENTLY</code>: your last proof of identity must be younger than {{ lifetime }} seconds.</p>
+    </div>
+    <div class="section">
+        <h2>Your proofs of identity</h2>
+        <table class="kv">
+            {% for method, time in proofs %}
+                <tr>
+                    <th><code>{{ method == '*' ? 'unspecified (*)' : method }}</code></th>
+                    <td>{{ time|date('H:i:s') }}, {{ now - time }} seconds ago</td>
+                </tr>
+            {% endfor %}
+            <tr><th><code>oidc_acr</code></th><td>{{ acr ?? 'none' }}</td></tr>
+        </table>
+        <p>Reload this page after {{ lifetime }} seconds: instead of a 403, the authenticator sends you back to Keycloak with <code>prompt=login</code> and your ID token as <code>id_token_hint</code>, then back here.</p>
+        <p class="actions">
+            <a class="button" href="{{ path('app_reauth_sensitive') }}">Reload</a>
+            <a class="button button-quiet" href="{{ path('app_account', {firewall: 'reauth'}) }}">Account page and flow trace</a>
+        </p>
+    </div>
+</main>
+{% endblock %}
