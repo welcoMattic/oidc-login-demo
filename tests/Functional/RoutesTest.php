@@ -62,7 +62,7 @@ class RoutesTest extends WebTestCase
 
         $content = $client->getResponse()->getContent();
 
-        // Check that all ten login links are present
+        // Check that every login link is present
         $firewalls = [
             'default',
             'basic',
@@ -74,6 +74,11 @@ class RoutesTest extends WebTestCase
             'email',
             'idtoken',
             'callback',
+            'refresh',
+            'secretjwt',
+            'privatekeyjwt',
+            'reauth',
+            'hint',
         ];
 
         foreach ($firewalls as $firewall) {
@@ -96,6 +101,11 @@ class RoutesTest extends WebTestCase
                 'email' => 'Identifier from another claim',
                 'idtoken' => 'Claims from the ID token',
                 'callback' => 'Custom callback route',
+                'refresh' => 'Refresh token grant',
+                'secretjwt' => 'client_secret_jwt',
+                'privatekeyjwt' => 'private_key_jwt',
+                'reauth' => 'Re-authentication',
+                'hint' => 'Per-request parameters',
             ];
 
             $title = $scenarioTitles[$firewall];
