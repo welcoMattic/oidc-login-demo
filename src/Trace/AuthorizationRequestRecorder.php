@@ -5,6 +5,7 @@ namespace App\Trace;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
+use Symfony\Component\Security\Http\SecurityRequestAttributes;
 
 /**
  * Records authorization requests as they are redirected to the OIDC provider.
@@ -65,9 +66,22 @@ final class AuthorizationRequestRecorder
             }
         }
 
-        // Determine the trigger
+        // the ID token a re-authentication sends as a hint is a credential: keep its head only
+        if (isset($orderedParams['id_token_hint'])) {
+            $idTokenHint = $orderedParams['id_token_hint'];
+            $orderedParams['id_token_hint'] =
+                substr($idTokenHint, 0, 32) . '... (the ID token, ' . strlen($idTokenHint) . ' chars)';
+        }
+
+        // Determine the trigger: the start route, the entry point, or a re-authentication, which
+        // the firewall starts for a denied attribute it names in a request attribute
         $route = $request->attributes->get('_route', '');
-        $trigger = str_starts_with($route, '_oidc_login_start_') ? 'start_route' : 'entry_point';
+        $reAuthenticationAttribute = $request->attributes->get(SecurityRequestAttributes::RE_AUTHENTICATION_ATTRIBUTE);
+        $trigger = match (true) {
+            null !== $reAuthenticationAttribute => 're_authentication',
+            str_starts_with($route, '_oidc_login_start_') => 'start_route',
+            default => 'entry_point',
+        };
 
         // Determine the firewall name
         $firewall = $request->attributes->get('firewallName');
@@ -89,6 +103,7 @@ final class AuthorizationRequestRecorder
             'params' => $orderedParams,
             'started_at' => $startedAt,
             'trigger' => $trigger,
+            're_authentication_attribute' => is_string($reAuthenticationAttribute) ? $reAuthenticationAttribute : null,
             'requested_path' => $request->getPathInfo(),
             'firewall' => $firewall,
         ];

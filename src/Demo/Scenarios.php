@@ -199,7 +199,10 @@ final class Scenarios
                 'allowed_time_drift' => 0,
                 'max_age' => null,
                 'options' => [
-                    ['name' => 'client_authentication', 'value' => 'client_secret_jwt: { algorithm: HS256, lifetime: 60 }'],
+                    [
+                        'name' => 'client_authentication',
+                        'value' => 'client_secret_jwt: { algorithm: HS256, lifetime: 60 }',
+                    ],
                     ['name' => 'enable_end_session', 'value' => 'true'],
                 ],
             ],
@@ -244,7 +247,10 @@ final class Scenarios
                 'max_age' => null,
                 'options' => [
                     ['name' => 'authorization_params', 'value' => 'prompt: login'],
-                    ['name' => 'OidcAuthorizationRequestEvent', 'value' => 'login_hint from ?login_hint=, ui_locales from Accept-Language'],
+                    [
+                        'name' => 'OidcAuthorizationRequestEvent',
+                        'value' => 'login_hint from ?login_hint=, ui_locales from Accept-Language',
+                    ],
                     ['name' => 'enable_end_session', 'value' => 'true'],
                 ],
             ],

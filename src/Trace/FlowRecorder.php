@@ -198,12 +198,14 @@ final class FlowRecorder
                 foreach ($bodyData as $key => $value) {
                     if ($key === 'client_secret') {
                         $filteredBody[$key] = '***';
-                    } elseif (in_array(
-                        $key,
-                        ['code_verifier', 'code', 'grant_type', 'redirect_uri', 'client_id'],
-                        true,
-                    )) {
-                        $filteredBody[$key] = $value;
+                    } elseif ($key === 'client_assertion' && is_string($value)) {
+                        // the assertion is a credential for its short lifetime: shown decoded, never whole
+                        $filteredBody[$key] = '<jwt, ' . strlen($value) . ' chars, decoded below>';
+                        try {
+                            $data['client_assertion'] = $this->jwtDecoder::decode($value);
+                        } catch (\InvalidArgumentException) {
+                            $filteredBody[$key] = '<' . strlen($value) . ' chars, not a JWT>';
+                        }
                     } else {
                         $filteredBody[$key] = $value;
                     }
@@ -250,21 +252,37 @@ final class FlowRecorder
             return 'Authorization: Basic <client_id>:***';
         }
 
+        $body = isset($options['body']) && is_array($options['body']) ? $options['body'] : [];
+
         // Check if client_secret is in body
-        if (isset($options['body']) && is_array($options['body']) && isset($options['body']['client_secret'])) {
+        if (isset($body['client_secret'])) {
             return 'client_secret in the request body (redacted)';
         }
 
-        // Public client
-        if (
-            !isset($options['auth_bearer'])
-            && !isset($options['auth_basic'])
-            && !isset($options['body']['client_secret'])
-        ) {
-            return 'none: a public client sends no credentials';
+        // A JWT assertion the client signed itself (RFC 7523): with its secret for
+        // client_secret_jwt, with its private key for private_key_jwt
+        if (isset($body['client_assertion']) && is_string($body['client_assertion'])) {
+            try {
+                $header = $this->jwtDecoder::decode($body['client_assertion'])['header'];
+            } catch (\InvalidArgumentException) {
+                return 'client_assertion: a JWT the client signed';
+            }
+
+            $alg = is_string($header['alg'] ?? null) ? $header['alg'] : 'unknown';
+            $method = str_starts_with($alg, 'HS')
+                ? 'client_secret_jwt, keyed with the client secret, which is not sent'
+                : 'private_key_jwt, signed with the private key of the client';
+
+            return sprintf(
+                'client_assertion: a JWT signed with %s%s (%s)',
+                $alg,
+                is_string($header['kid'] ?? null) ? ', kid ' . $header['kid'] : '',
+                $method,
+            );
         }
 
-        return null;
+        // Public client
+        return 'none: a public client sends no credentials';
     }
 
     /**
@@ -442,6 +460,7 @@ final class FlowRecorder
             'duration_ms' => $durationMs,
             'firewall' => $firewall,
             'trigger' => $pendingEntry['trigger'],
+            're_authentication_attribute' => $pendingEntry['re_authentication_attribute'] ?? null,
             'requested_path' => $pendingEntry['requested_path'],
             'provider' => $providerClass,
             'client_id' => $clientId,
@@ -659,23 +678,28 @@ final class FlowRecorder
             'ok' => true,
         ];
 
-        // auth_time check (only when scenario sets max_age)
-        if ($maxAge !== null) {
-            $authTime = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['auth_time'])
-                ? $idTokenDecoded['payload']['auth_time']
-                : null;
-            if (is_int($authTime)) {
-                $checks[] = [
-                    'label' => 'auth_time',
-                    'detail' => sprintf(
+        // auth_time: checked against max_age when the scenario sets it, and recorded in any case
+        // as the time of the authentication proof that IS_AUTHENTICATED_RECENTLY reads
+        $authTime = $idTokenDecoded !== null && isset($idTokenDecoded['payload']['auth_time'])
+            ? $idTokenDecoded['payload']['auth_time']
+            : null;
+        if (is_int($authTime)) {
+            $checks[] = [
+                'label' => 'auth_time',
+                'detail' => $maxAge !== null
+                    ? sprintf(
                         'auth_time: %s, max_age: %d seconds, age: %d seconds',
                         date('c', $authTime),
                         $maxAge,
                         time() - $authTime,
+                    )
+                    : sprintf(
+                        'auth_time: %s, %d seconds ago: when Keycloak last checked your credentials, kept as the time of the authentication proof (no max_age to check it against)',
+                        date('c', $authTime),
+                        time() - $authTime,
                     ),
-                    'ok' => true,
-                ];
-            }
+                'ok' => true,
+            ];
         }
 
         // sub check

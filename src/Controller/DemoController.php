@@ -88,6 +88,24 @@ final class DemoController extends AbstractController
             }
         }
 
+        // What the security token holds besides the user: the tokens of the provider, the
+        // authentication context class it asserted, and the proofs of authentication, the
+        // methods the user proved mapped to when (IS_AUTHENTICATED_RECENTLY reads them)
+        $expiresAt = $token?->hasAttribute('oidc_access_token_expires_at')
+            ? $token->getAttribute('oidc_access_token_expires_at')
+            : null;
+        $sessionTokens = [
+            'access_token_expires_at' => is_int($expiresAt) ? $expiresAt : null,
+            'refresh_token' =>
+                $token?->hasAttribute('oidc_refresh_token') && is_string($token->getAttribute('oidc_refresh_token')),
+            'acr' => $token?->hasAttribute('oidc_acr') ? $token->getAttribute('oidc_acr') : null,
+            'proofs' => $token?->getAuthenticationProofs() ?? [],
+            'now' => time(),
+        ];
+
+        // The renewals TokenRefreshRecorder kept, for a firewall renewing the access token
+        $renewals = $request->hasSession() ? $request->getSession()->get('oidc_demo.renewals.' . $firewall, []) : [];
+
         // Get user's additional claims if available
         $additionalClaims = [];
         if ($user && method_exists($user, 'getAdditionalClaims')) {
@@ -105,6 +123,8 @@ final class DemoController extends AbstractController
             'firewallYaml' => $firewallYaml,
             'profilerToken' => $profilerToken,
             'additionalClaims' => $additionalClaims,
+            'sessionTokens' => $sessionTokens,
+            'renewals' => is_array($renewals) ? $renewals : [],
         ]);
     }
 }

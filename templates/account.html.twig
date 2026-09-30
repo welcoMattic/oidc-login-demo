@@ -71,6 +71,73 @@
             </section>
 
             <section class="card">
+                <h3>What the session holds</h3>
+                <dl class="facts">
+                    <dt>Access token</dt>
+                    <dd>
+                        {% if sessionTokens.access_token_expires_at is not null %}
+                            {% set left = sessionTokens.access_token_expires_at - sessionTokens.now %}
+                            expires at <code>{{ sessionTokens.access_token_expires_at|date('H:i:s T') }}</code>,
+                            {% if left > 0 %}in {{ left }} seconds{% else %}expired {{ -left }} seconds ago{% endif %}
+                        {% else %}
+                            no expiry reported
+                        {% endif %}
+                    </dd>
+                    <dt>Refresh token</dt>
+                    <dd>{{ sessionTokens.refresh_token ? 'held (oidc_refresh_token)' : 'none' }}</dd>
+                    <dt>Authentication context (acr)</dt>
+                    <dd>
+                        <code>{{ sessionTokens.acr ?? 'none' }}</code>
+                        {% if sessionTokens.acr == '1' %}<span class="small">Keycloak checked your password during this login</span>
+                        {% elseif sessionTokens.acr == '0' %}<span class="small">Keycloak answered from its session (single sign-on), no password typed</span>
+                        {% endif %}
+                    </dd>
+                    <dt>Authentication proofs</dt>
+                    <dd>
+                        {% for method, time in sessionTokens.proofs %}
+                            <code>{{ method }}</code> at <code>{{ time|date('H:i:s T') }}</code>, {{ sessionTokens.now - time }} seconds ago<br>
+                        {% else %}
+                            none
+                        {% endfor %}
+                    </dd>
+                </dl>
+                <p class="card-note">
+                    The proof time is the <code>auth_time</code> claim of the ID token (<code>*</code> when Keycloak names no <code>amr</code> method): when Keycloak last checked your password, not when this application logged you in. <code>IS_AUTHENTICATED_RECENTLY</code> and <code>IS_AUTHENTICATED_VERY_RECENTLY</code> are decided on it.
+                </p>
+
+                {% if firewall == 'refresh' %}
+                    <h4>Renewals</h4>
+                    {% if renewals is empty %}
+                        <p class="small">None yet. Reload this page less than 30 seconds (the leeway) before the access token expires: the firewall renews it with the refresh token before the page is rendered.</p>
+                    {% else %}
+                        <table class="value-table">
+                            <tbody>
+                                {% for renewal in renewals|reverse %}
+                                    <tr>
+                                        <th>{{ renewal.at|date('H:i:s T') }}</th>
+                                        <td>
+                                            {% if renewal.error %}
+                                                <code>{{ renewal.status }} {{ renewal.error }}</code>
+                                            {% else %}
+                                                <code>refresh_token</code> grant, new access token for {{ renewal.expires_in ?? '?' }} seconds{% if renewal.refresh_token_rotated %}, refresh token rotated{% endif %}{% if renewal.id_token_reissued %}, new ID token{% endif %}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                {% endif %}
+
+                {% if firewall == 'reauth' %}
+                    <div class="chips">
+                        <a class="button" href="{{ path('app_reauth_sensitive') }}">Open the sensitive page</a>
+                    </div>
+                    <p class="small">It requires <code>IS_AUTHENTICATED_VERY_RECENTLY</code>: a proof younger than 60 seconds. Past that, you are sent back to Keycloak to type your password again.</p>
+                {% endif %}
+            </section>
+
+            <section class="card">
                 <h3>Firewall configuration</h3>
                 {% if scenario.options|length > 0 %}
                     <div class="chips">
@@ -111,7 +178,15 @@
                 <ol class="trace-steps">
                     {# Step 1: the authorization request #}
                     <li class="trace-step">
-                        <h4>{% if trace.trigger == 'start_route' %}You clicked Log in{% else %}You asked for a protected page{% endif %}</h4>
+                        <h4>
+                            {% if trace.trigger == 're_authentication' %}A sensitive page asked you to authenticate again
+                            {% elseif trace.trigger == 'start_route' %}You clicked Log in
+                            {% else %}You asked for a protected page
+                            {% endif %}
+                        </h4>
+                        {% if trace.trigger == 're_authentication' %}
+                            <p class="meaning"><code>{{ trace.re_authentication_attribute ?? 'IS_AUTHENTICATED_VERY_RECENTLY' }}</code> was denied to an authenticated user: instead of a 403, the firewall asked its re-authentication entry point, the oidc_login authenticator, for a new authorization request, and saved the page to come back to.</p>
+                        {% endif %}
                         <dl class="kv">
                             <dt>Requested path</dt>
                             <dd>{{ trace.requested_path }}</dd>
@@ -137,9 +212,10 @@
                                             {% elseif param == 'code_challenge' %}PKCE, the SHA-256 of a verifier kept in the session
                                             {% elseif param == 'code_challenge_method' %}PKCE
                                             {% elseif param == 'max_age' %}how old the authentication at Keycloak may be
-                                            {% elseif param == 'prompt' %}from authorization_params
-                                            {% elseif param == 'login_hint' %}from authorization_params
-                                            {% elseif param == 'ui_locales' %}from authorization_params
+                                            {% elseif param == 'prompt' and trace.trigger == 're_authentication' %}forced by the re-authentication: Keycloak asks for the password even with a live session
+                                            {% elseif param == 'id_token_hint' %}your current ID token: tells Keycloak which user must authenticate again
+                                            {% elseif param in ['login_hint', 'ui_locales'] and firewall == 'hint' %}set per request by a listener of OidcAuthorizationRequestEvent
+                                            {% elseif param in ['prompt', 'login_hint', 'ui_locales'] %}from authorization_params
                                             {% else %}{{ param }}
                                             {% endif %}
                                         </td>
@@ -198,6 +274,28 @@
                                         {% endfor %}
                                     {% endif %}
                                 </dl>
+                                {% if exchange.client_assertion is defined %}
+                                    <p class="table-title">The client assertion, decoded (its signature is what authenticates the client)</p>
+                                    <table class="value-table">
+                                        <tbody>
+                                            {% for key, value in exchange.client_assertion.header %}
+                                                <tr><th>header.{{ key }}</th><td><code>{{ value|json_encode }}</code></td></tr>
+                                            {% endfor %}
+                                            {% for key, value in exchange.client_assertion.payload %}
+                                                <tr>
+                                                    <th>{{ key }}</th>
+                                                    <td>
+                                                        <code>{{ value|json_encode(constant('JSON_UNESCAPED_SLASHES')) }}</code>
+                                                        {% if key == 'aud' %}<span class="text-muted">the token endpoint</span>
+                                                        {% elseif key == 'jti' %}<span class="text-muted">unique, so that the provider can refuse a replay</span>
+                                                        {% elseif key == 'exp' %}<span class="text-muted">{{ value - exchange.client_assertion.payload.iat|default(value) }} seconds after iat (lifetime)</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                {% endif %}
                                 {% if exchange.response_summary is not empty %}
                                     <p class="table-title">Token response</p>
                                     <table class="value-table">

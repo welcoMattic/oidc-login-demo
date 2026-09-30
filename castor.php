@@ -101,7 +101,14 @@ function smoke(): void
         'roles' => ['--page', 'ROLE_ADMIN', '--page', 'ROLE_EDITOR'],
         'email' => ['--page', 'User identifier alice@example.com', '--page', 'OidcUser'],
         'idtoken' => ['--page', 'read from the ID token', '--page', 'OidcUser'],
-        'callback' => ['--authz', 'redirect_uri=http%3A%2F%2Flocalhost%3A8001%2Fcallback%2Freturn-from-keycloak', '--page', 'return-from-keycloak', '--page', 'OidcUser']
+        'callback' => ['--authz', 'redirect_uri=http%3A%2F%2Flocalhost%3A8001%2Fcallback%2Freturn-from-keycloak', '--page', 'return-from-keycloak', '--page', 'OidcUser'],
+        'secretjwt' => ['--authz', 'client_id=symfony-demo-jwt', '--page', 'a JWT signed with HS256', '--page', 'client_secret_jwt'],
+        'privatekeyjwt' => ['--authz', 'client_id=symfony-demo-pkjwt', '--page', 'a JWT signed with ES256, kid symfony-demo-client-2026', '--page', 'private_key_jwt'],
+        'hint' => ['--start-query', 'login_hint=alice', '--authz', 'login_hint=alice', '--authz', 'ui_locales=en', '--authz', 'prompt=login', '--page', 'set per request by a listener of OidcAuthorizationRequestEvent'],
+        // the access token lives 60 seconds and is renewed 30 seconds before it expires
+        'refresh' => ['--authz', 'client_id=symfony-demo-refresh', '--page', 'held (oidc_refresh_token)', '--wait', '31', '--page-after', 'refresh_token grant, new access token'],
+        // very_recent_authentication_lifetime is 60 seconds
+        'reauth' => ['--page', 'Open the sensitive page', '--reauth', '61'],
     ];
     
     foreach ($scenarios as $firewall => $expectations) {
@@ -226,11 +233,16 @@ function verify_setup(): void
         'roles' => '/roles',
         'email' => '/email',
         'idtoken' => '/idtoken',
-        'callback' => '/callback'
+        'callback' => '/callback',
+        'refresh' => '/refresh',
+        'secretjwt' => '/secretjwt',
+        'privatekeyjwt' => '/privatekeyjwt',
+        'reauth' => '/reauth',
+        'hint' => '/hint',
     ];
     
     foreach ($scenarios as $name => $path) {
-        io()->writeln(sprintf('  %-9s  http://localhost:8001%s/account  alice/alice, bob/bob', $name, $path));
+        io()->writeln(sprintf('  %-13s  http://localhost:8001%s/account  alice/alice, bob/bob', $name, $path));
     }
     
     io()->writeln('');

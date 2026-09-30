@@ -17,10 +17,12 @@
     {% endif %}
 
     {% for group, groupScenarios in {
-        'Client types': ['default', 'basic', 'public'],
-        'The authorization request': ['strict', 'plain'],
+        'Client types': ['default', 'public'],
+        'Client authentication at the token endpoint': ['basic', 'secretjwt', 'privatekeyjwt'],
+        'The authorization request': ['strict', 'plain', 'hint'],
         'The ID token': ['es256'],
         'The user and the claims': ['roles', 'email', 'idtoken'],
+        'The session': ['refresh', 'reauth'],
         'The routes': ['callback']
     } %}
         <div class="section">
@@ -38,9 +40,19 @@
                             <a class="button" href="{{ path('_oidc_login_start_' ~ scenarioName) }}">
                                 Log in
                             </a>
-                            <a class="button button-quiet" href="{{ path('app_account', {firewall: scenarioName}) }}">
-                                Open a protected page
-                            </a>
+                            {% if scenarioName == 'hint' %}
+                                <a class="button button-quiet" href="{{ path('_oidc_login_start_hint', {login_hint: 'bob'}) }}">
+                                    Log in as bob
+                                </a>
+                            {% elseif scenarioName == 'reauth' %}
+                                <a class="button button-quiet" href="{{ path('app_reauth_sensitive') }}">
+                                    Open the sensitive page
+                                </a>
+                            {% else %}
+                                <a class="button button-quiet" href="{{ path('app_account', {firewall: scenarioName}) }}">
+                                    Open a protected page
+                                </a>
+                            {% endif %}
                         </div>
                     </div>
                 {% endfor %}

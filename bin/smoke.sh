@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Browserless login through ONE scenario using curl and python3 for HTML unescaping.
 #
-# Usage: bin/smoke.sh <firewall> [--authz <substring>]... [--login-page <substring>]... [--page <substring>]...
+# Usage: bin/smoke.sh <firewall> [--start-query <query>] [--authz <substring>]... [--login-page <substring>]... [--page <substring>]...
+#                     [--wait <seconds> --page-after <substring>...] [--reauth <seconds>]
 #
 # Steps (each prints OK/FAIL and exits 1 on failure):
 #   (1) GET /<firewall>/start with a cookie jar, expect 302 to Keycloak with response_type=code, state=, nonce=, scope=openid
@@ -11,6 +12,12 @@
 #   (5) GET the account page, expect 200 and --page substrings in the HTML-unescaped, tag-stripped text
 #   (6) GET /<firewall>/logout, expect 302 to Keycloak end_session_endpoint with id_token_hint and post_logout_redirect_uri
 #   (7) Follow the logout redirect, then GET the auth URL with the KC_JAR and assert login form is shown again (provider session is gone)
+#
+# Optional steps, run between (5) and (6):
+#   --wait <s> with --page-after: sleep, GET the account page again and check the substrings (e.g. a token renewal)
+#   --reauth <s>: GET /<firewall>/sensitive (200), sleep, GET it again and expect a re-authentication: a 302 to
+#                 Keycloak with prompt=login and id_token_hint, the login form again despite the Keycloak session,
+#                 then the callback back to /<firewall>/sensitive (200)
 
 set -euo pipefail
 
@@ -18,6 +25,10 @@ cd "$(dirname "$0")/.."
 
 # Parse arguments
 FIREWALL=""
+START_QUERY=""
+WAIT_SECONDS=""
+PAGE_AFTER_SUBSTRINGS=()
+REAUTH_SECONDS=""
 AUTHZ_SUBSTRINGS=()
 LOGIN_PAGE_SUBSTRINGS=()
 PAGE_SUBSTRINGS=()
@@ -35,6 +46,22 @@ while [[ $# -gt 0 ]]; do
         --page)
             shift
             PAGE_SUBSTRINGS+=("$1")
+            ;;
+        --start-query)
+            shift
+            START_QUERY="$1"
+            ;;
+        --wait)
+            shift
+            WAIT_SECONDS="$1"
+            ;;
+        --page-after)
+            shift
+            PAGE_AFTER_SUBSTRINGS+=("$1")
+            ;;
+        --reauth)
+            shift
+            REAUTH_SECONDS="$1"
             ;;
         *)
             if [[ -z "$FIREWALL" ]]; then
@@ -130,7 +157,7 @@ print(content)
 }
 
 # (1) GET /<firewall>/start with app cookie jar, expect 302 to Keycloak
-START_URL="http://localhost:8001/${FIREWALL}/start"
+START_URL="http://localhost:8001/${FIREWALL}/start${START_QUERY:+?$START_QUERY}"
 echo -n "(1) GET $START_URL with app jar... "
 
 response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$START_URL" 2>/dev/null || true)
@@ -325,6 +352,112 @@ if [[ ${#PAGE_SUBSTRINGS[@]} -gt 0 ]]; then
 fi
 
 echo "OK"
+
+# Optional: wait, then GET the account page again (e.g. to see the access token renewed)
+if [[ -n "$WAIT_SECONDS" ]]; then
+    echo -n "(5b) Waiting ${WAIT_SECONDS}s, then GET $ACCOUNT_URL again... "
+    sleep "$WAIT_SECONDS"
+
+    response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$ACCOUNT_URL" 2>/dev/null || true)
+    http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+    require_status "$http_code" "account page after the wait"
+    body=$(echo "$response" | sed '1,/^$/d')
+
+    echo "HTTP $http_code"
+    if [[ "$http_code" != "200" ]]; then
+        echo "FAIL: Expected 200, got $http_code"
+        exit 1
+    fi
+
+    if [[ ${#PAGE_AFTER_SUBSTRINGS[@]} -gt 0 ]]; then
+        page_text=$(unescape_and_strip "$body")
+        if ! check_substrings "$page_text" "${PAGE_AFTER_SUBSTRINGS[@]}"; then
+            exit 1
+        fi
+    fi
+
+    echo "OK"
+fi
+
+# Optional: the sensitive page requiring a very recent authentication, then a re-authentication
+if [[ -n "$REAUTH_SECONDS" ]]; then
+    SENSITIVE_URL="http://localhost:8001/${FIREWALL}/sensitive"
+    echo -n "(5c) GET $SENSITIVE_URL right after the login... "
+
+    response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$SENSITIVE_URL" 2>/dev/null || true)
+    http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+    require_status "$http_code" "sensitive page"
+    echo "HTTP $http_code"
+    if [[ "$http_code" != "200" ]]; then
+        echo "FAIL: Expected 200 on a fresh login, got $http_code"
+        exit 1
+    fi
+    echo "OK"
+
+    echo -n "(5d) Waiting ${REAUTH_SECONDS}s, then GET $SENSITIVE_URL again... "
+    sleep "$REAUTH_SECONDS"
+
+    response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$SENSITIVE_URL" 2>/dev/null || true)
+    http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+    require_status "$http_code" "sensitive page after the wait"
+    location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
+    echo "HTTP $http_code"
+    if [[ "$http_code" != "302" ]]; then
+        echo "FAIL: Expected a 302 re-authentication, got $http_code"
+        exit 1
+    fi
+    if ! check_substrings "$location" "https://localhost:8443/realms/demo/protocol/openid-connect/auth" "prompt=login" "id_token_hint="; then
+        exit 1
+    fi
+    echo "OK"
+
+    # the Keycloak session is still alive, yet prompt=login makes it ask for the password
+    REAUTH_URL="$location"
+    echo -n "(5e) GET the re-authentication request with the Keycloak jar... "
+    response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" "$REAUTH_URL" 2>/dev/null || true)
+    http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+    require_status "$http_code" "re-authentication request"
+    echo "HTTP $http_code"
+    form_action=$(echo "$response" | grep -oE 'action="[^"]*login-actions/authenticate[^"]*"' | head -1 | sed 's/action="//;s/"$//' || true)
+    if [[ "$http_code" != "200" || -z "$form_action" ]]; then
+        echo "FAIL: Expected the login form again despite the Keycloak session"
+        exit 1
+    fi
+    form_action=$(unescape_html "$form_action")
+    echo "OK"
+
+    echo -n "(5f) POST the login form again... "
+    response=$(curl -s -i -c "$KC_JAR" -b "$KC_JAR" -X POST -d "username=alice&password=alice&credentialId=" "$form_action" 2>/dev/null || true)
+    http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+    require_status "$http_code" "re-authentication form"
+    location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
+    echo "HTTP $http_code, Location: $location"
+    if [[ "$http_code" != "302" ]] || ! echo "$location" | grep -qF -- "${EXPECTED_CALLBACK}?"; then
+        echo "FAIL: Expected a redirect to ${EXPECTED_CALLBACK}"
+        exit 1
+    fi
+    echo "OK"
+
+    echo -n "(5g) GET the callback, expect the sensitive page as target... "
+    response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$location" 2>/dev/null || true)
+    http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+    require_status "$http_code" "re-authentication callback"
+    location=$(echo "$response" | grep -iE '^Location:' | sed 's/Location: //i' | tr -d '\r' || true)
+    echo "HTTP $http_code, Location: $location"
+    if [[ "$http_code" != "302" || "$location" != "$SENSITIVE_URL" ]]; then
+        echo "FAIL: Expected a redirect back to $SENSITIVE_URL"
+        exit 1
+    fi
+
+    response=$(curl -s -i -c "$APP_JAR" -b "$APP_JAR" "$SENSITIVE_URL" 2>/dev/null || true)
+    http_code=$(printf '%s\n' "${response%%$'\n'*}" | grep -oE '[0-9]{3}' | head -1 || true)
+    require_status "$http_code" "sensitive page after the re-authentication"
+    if [[ "$http_code" != "200" ]]; then
+        echo "FAIL: Expected 200 after the re-authentication, got $http_code"
+        exit 1
+    fi
+    echo "OK"
+fi
 
 # (6) GET logout, expect 302 to Keycloak end_session_endpoint with id_token_hint and post_logout_redirect_uri
 LOGOUT_URL="http://localhost:8001/${FIREWALL}/logout"
