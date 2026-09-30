@@ -21,6 +21,7 @@ Other tasks:
 
 | Task | Description |
 |------|-------------|
+| `castor link [symfonyDir]` | Symlink the Symfony packages of `vendor/` to a local clone of symfony/symfony (default `../../oss/symfony`), to run the branch checked out there; composer clobbers the symlinks, so re-run it after every composer command |
 | `castor check` | Lint the container, YAML and Twig, list firewalls and callback routes |
 | `castor smoke` | Browserless login through Keycloak for each scenario and verify the result |
 | `castor test` | Run PHPUnit without Docker (fake provider at HTTP transport level) |

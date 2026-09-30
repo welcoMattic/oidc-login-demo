@@ -17,6 +17,15 @@ function install(): void
     certs();
 }
 
+// "link" is a PHP function, hence the function name; the task keeps the short name
+#[AsTask(name: 'link', description: 'Link the Symfony packages of vendor/ to a local clone of symfony/symfony (re-run after every composer command)')]
+function link_symfony(string $symfonyDir = '../../oss/symfony'): void
+{
+    // the monorepo ships the script: it replaces vendor/symfony/<package> with a symlink
+    // to src/Symfony/<...> of the clone, so the app runs the branch checked out there
+    run(['php', $symfonyDir.'/link', '.']);
+}
+
 #[AsTask(description: 'Generate TLS certificates for the Identity Provider')]
 function certs(): void
 {
