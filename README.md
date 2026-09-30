@@ -1,6 +1,6 @@
 # Symfony 8.2 oidc_login demo
 
-A Symfony 8.2 application that showcases the new `oidc_login` firewall authenticator implementing the OpenID Connect Authorization Code Flow natively, against a real Keycloak 26 provider. Ten firewalls exercise every option of the merged feature, and after each login the account page replays the whole flow with the real values: authorization request, callback, code exchange, ID token verification, UserInfo call, user built.
+A Symfony 8.2 application that showcases the new `oidc_login` firewall authenticator implementing the OpenID Connect Authorization Code Flow natively, against a real Keycloak 26 provider. Fifteen firewalls exercise every option of the merged feature (client authentication with a secret, a JWT or nothing, PKCE, ID token checks, claims mapping, refresh token grant, re-authentication, per-request authorization parameters, RP-Initiated Logout), and after each login the account page replays the whole flow with the real values: authorization request, callback, code exchange, ID token verification, UserInfo call, user built.
 
 ## Try it
 
@@ -23,7 +23,7 @@ Other tasks:
 |------|-------------|
 | `castor link [symfonyDir]` | Symlink the Symfony packages of `vendor/` to a local clone of symfony/symfony (default `../../oss/symfony`), to run the branch checked out there; composer clobbers the symlinks, so re-run it after every composer command |
 | `castor check` | Lint the container, YAML and Twig, list firewalls and callback routes |
-| `castor smoke` | Browserless login through Keycloak for each scenario and verify the result |
+| `castor smoke` | Browserless login through Keycloak for each scenario and verify the result (about three minutes: the `refresh` and `reauth` scenarios wait for a token to expire) |
 | `castor test` | Run PHPUnit without Docker (fake provider at HTTP transport level) |
 | `castor qa` | Check formatting, lint and analyze the code with [Mago](https://mago.carthage.software) |
 | `castor fmt` | Format the code with Mago |
@@ -49,6 +49,11 @@ Each firewall tests a different configuration set. The firewall names are the UR
 | `email` | `user_identifier_claim: email` | Identity becomes the email address instead of the sub UUID | `symfony-demo` |
 | `idtoken` | `user_data_source: id_token` | Claims read from the validated ID token, no UserInfo request | `symfony-demo` |
 | `callback` | `check_path: app_callback_return`, a route name | The redirect_uri in the authorization request and the callback path in step 2 of the trace, both at /callback/return-from-keycloak, and no `_oidc_login_callback_callback` route in `debug:router` | `symfony-demo` |
+| `secretjwt` | `client_authentication: { client_secret_jwt: { secret: ..., algorithm: HS256 } }` | Step 3 of the trace: a `client_assertion` signed with HS256 instead of the secret, decoded (`iss` and `sub` the client, `aud` the token endpoint, a `jti`, 60 seconds of lifetime) | `symfony-demo-jwt` |
+| `privatekeyjwt` | `client_authentication: { private_key_jwt: { key: ..., algorithm: ES256 } }` | Same, signed with the ES256 private key of the client, its `kid` in the header; Keycloak only holds the public key, registered as the JWKS of the client | `symfony-demo-pkjwt` |
+| `refresh` | `refresh_access_token: { enabled: true, leeway: 30 }` | The client issues 60-second access tokens: reload the account page half a minute after the login, the *Renewals* list shows the `refresh_token` grant, the rotated refresh token and the new ID token, and the new expiry | `symfony-demo-refresh` |
+| `reauth` | `very_recent_authentication_lifetime: 60` and `#[IsGranted('IS_AUTHENTICATED_VERY_RECENTLY')]` on `/reauth/sensitive` | Past 60 seconds the sensitive page does not answer 403: the authenticator, the re-authentication entry point of the firewall, sends you to Keycloak with `prompt=login` and your ID token as `id_token_hint`, then back to the page. Step 1 of the trace says *A sensitive page asked you to authenticate again* | `symfony-demo` |
+| `hint` | `App\Security\LoginHintListener`, a listener of `OidcAuthorizationRequestEvent` | *Log in as bob* starts at `/hint/start?login_hint=bob`: the listener forwards the `login_hint` and adds the `ui_locales` the browser prefers, which Keycloak uses to prefill the username and pick the language | `symfony-demo` |
 
 The flow can start in two ways: clicking the *Log in* button calls the route the `start_path` option declares (`_oidc_login_start_<firewall>`), while opening a protected page directly triggers the entry point, which is the authenticator itself redirecting straight to the provider.
 
@@ -60,7 +65,8 @@ The complete `oidc_login` option set, with defaults from `OidcLoginFactory` and 
 |--------|---------|----------|-------|
 | `provider_uri` | *required* | all | Issuer URL used for discovery, must use HTTPS |
 | `client_id` | *required* | all | Client identifier issued by the provider |
-| `client_authentication` | *required* | all | How the client authenticates at the token endpoint, exactly one of: `client_secret_basic` or `client_secret_post` with the secret, `none` for a public client, or the `id` of a `ClientAuthenticationInterface` service. There is no default |
+| `client_authentication` | *required* | all | How the client authenticates at the token endpoint, exactly one of: `client_secret_basic` (`basic`) or `client_secret_post` (`default`) with the secret, `client_secret_jwt` (`secretjwt`) with the secret and an HMAC algorithm, `private_key_jwt` (`privatekeyjwt`) with a JSON-encoded private JWK and a signature algorithm, `none` (`public`) for a public client, or the `id` of a `ClientAuthenticationInterface` service. There is no default |
+| `http_client` | `http_client` | none | The HTTP client service every call to the provider goes through; a scoped client must scope every host the provider announces |
 | `scope` | `['openid']` | `default` | `openid` always added; `profile` and `email` requested to get claims |
 | `check_path` | `/oidc/callback` | `callback` | Callback path, must match redirect URI registered with provider; a route name is also accepted (the loader then declares nothing for it) |
 | `start_path` | `/oidc/start` | all | Path for the route that starts the flow |
@@ -75,10 +81,14 @@ The complete `oidc_login` option set, with defaults from `OidcLoginFactory` and 
 | `user_identifier_claim` | `sub` | `email` (`email`) | Claim used as user identifier |
 | `enable_end_session` | `false` | all | Enable RP-Initiated Logout via provider `end_session_endpoint` |
 | `post_logout_redirect_path` | `/` | all | Path for redirect after logout, sent as `post_logout_redirect_uri` |
+| `refresh_access_token.enabled` | `false` | `refresh` (`true`) | Renew the access token with the refresh token grant, from a firewall listener; an `invalid_grant` answer logs the user out |
+| `refresh_access_token.leeway` | `30` | `refresh` | How many seconds before its expiry the access token is renewed |
 | `discovery_cache_ttl` | `3600` | `strict` (`60`) | TTL in seconds for discovery document and JWKS |
 | `allowed_time_drift` | `0` | `strict` (`5`) | Clock skew tolerance for ID token time claims |
 
-The demo also uses generic firewall options: `login_path`, `failure_path`, `default_target_path` and the `logout` block with its `path` and `target`.
+The demo also uses generic firewall options: `login_path`, `failure_path`, `default_target_path` and the `logout` block with its `path` and `target`, and the root security option `very_recent_authentication_lifetime` (`reauth`), next to `recent_authentication_lifetime` for `IS_AUTHENTICATED_RECENTLY`. The `re_authentication_entry_point` firewall option is left to its default, the firewall entry point, which the `oidc_login` authenticator is.
+
+`authorization_params` is static; the parameters that depend on the request come from a listener of `OidcAuthorizationRequestEvent` (`hint`), which may add, change or remove any parameter except the ones the authenticator manages.
 
 Refused at compile time: a public client cannot disable PKCE nor the signature check; `authorization_params` cannot set `response_type`, `client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `code_challenge_method` nor `max_age`.
 
@@ -86,22 +96,22 @@ Refused at compile time: a public client cannot disable PKCE nor the signature c
 
 After a login, the right column of the account page replays the flow in seven steps, every value taken from what the authenticator actually did (the redirect it built, the callback query, the HTTP exchanges recorded through an `http_client` decorator, the passport and the security token):
 
-1. **You clicked Log in** or **You asked for a protected page**: the requested path, and the authorization request with every parameter explained (`response_type`, `client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge` and `code_challenge_method`, `max_age`, and the `authorization_params` such as `prompt`, `login_hint` and `ui_locales`)
+1. **You clicked Log in**, **You asked for a protected page** or **A sensitive page asked you to authenticate again**: the requested path, and the authorization request with every parameter explained (`response_type`, `client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge` and `code_challenge_method`, `max_age`, the `authorization_params` such as `prompt`, `login_hint` and `ui_locales`, the ones a listener set, and the `prompt=login` and `id_token_hint` of a re-authentication)
 2. **Keycloak authenticated you and sent you back**: the callback path and query (`code`, `state`, `session_state`, `iss`) and the `state` check
-3. **The code was exchanged for tokens**: the token endpoint request (how the client authenticated, the body with the `code_verifier`, the secret redacted) and the response (token types, lifetimes, scope, the tokens themselves reduced to their length)
+3. **The code was exchanged for tokens**: the token endpoint request (how the client authenticated, the body with the `code_verifier`, the secret redacted, the client assertion decoded) and the response (token types, lifetimes, scope, the tokens themselves reduced to their length)
 4. **The ID token was verified**: the header (`alg`, `kid`), the JWKS key that verified the signature (kid, kty, alg, use, and whether it was fetched during this login or served from cache), and the claim checks (`iss`, `aud`, `azp`, `exp`, `iat`, `nbf`, `nonce`, and `auth_time` when `max_age` is set)
 5. **Your claims were fetched from UserInfo** (the request with its bearer token and the claims, plus the `sub` cross-check) or **Your claims were read from the ID token** when `user_data_source` is `id_token`
 6. **The user was built**: the user provider, the user class, the identifier and the claim it was read from, the roles and where they come from
-7. **A session was opened**: the attributes kept on the security token (`oidc_id_token`, `oidc_access_token`), the duration of the flow, and what *Log out* does
+7. **A session was opened**: the attributes kept on the security token (`oidc_id_token`, `oidc_access_token`, `oidc_refresh_token`, `oidc_access_token_expires_at`, `oidc_acr`), the duration of the flow, and what *Log out* does
 
-The left column shows who you are now (the `OidcUser`, its standard and additional claims), the option chips of the scenario with the raw YAML block of its firewall, and, in the dev environment, links to the security and HTTP client panels of the profiler for the callback request.
+The left column shows who you are now (the `OidcUser`, its standard and additional claims), what the session holds (the access token expiry, the refresh token, the `acr` claim, the authentication proofs, and the renewals of the `refresh` scenario), the option chips of the scenario with the raw YAML block of its firewall, and, in the dev environment, links to the security and HTTP client panels of the profiler for the callback request.
 
 ## How it is wired
 
 The route loader import in `config/routes/security.yaml` registers one callback route per firewall:
 
 ```yaml
-_oidc_login_callbacks:
+_security_oidc_login:
     resource: security.authenticator.oidc_login.route_loader
     type: service
 
@@ -110,7 +120,7 @@ app_callback_return:
     path: /callback/return-from-keycloak
 ```
 
-The recipe pull request [symfony/recipes#1569](https://github.com/symfony/recipes/pull/1569) will do it automatically for new projects once merged.
+The security-bundle recipe adds this import since [symfony/recipes#1569](https://github.com/symfony/recipes/pull/1569) (`composer recipes:update symfony/security-bundle` on an existing project).
 
 The built-in `oidc` user provider builds a self-contained `OidcUser` from the claims collected during authentication, with two deliberate limits: the claims never grant roles nor define the identity (every user gets `ROLE_USER`, and a `roles` claim is dropped). Mapping claims onto roles is the job of your own provider implementing `AttributesBasedUserProviderInterface`. This demo uses a custom `KeycloakUserProvider`:
 
@@ -132,7 +142,11 @@ $claims['roles'] = $roles;
 return OidcUser::fromClaims($claims);
 ```
 
-The security token stores the tokens as attributes: `oidc_id_token` and `oidc_access_token`.
+The security token stores the tokens as attributes: `oidc_id_token`, `oidc_access_token`, `oidc_refresh_token` and `oidc_access_token_expires_at` (both null when the provider issued no refresh token or no `expires_in`), and `oidc_acr`, the authentication context class the provider asserted. The `amr` and `auth_time` claims become the authentication proofs of the token (`TokenInterface::getAuthenticationProofs()`), the methods the user proved mapped to when: `IS_AUTHENTICATED_RECENTLY` and `IS_AUTHENTICATED_VERY_RECENTLY` are decided on them. Keycloak sends no `amr` claim by default, so the method is `*` (unspecified).
+
+When the firewall enables `refresh_access_token`, `OidcTokenRefreshListener` runs after the security token is restored from the session and renews the access token through the `security.authenticator.oidc_login.token_refresher.<firewall>` service, which an application can also call to renew on demand. `App\Trace\TokenRefreshRecorder` spots these renewals among the calls to the provider for the account page.
+
+A re-authentication needs no configuration: `AuthenticatedVoter` denies `IS_AUTHENTICATED_VERY_RECENTLY` with a request for a re-authentication, and the firewall hands such a denial to its re-authentication entry point, which defaults to the entry point when it implements `ReAuthenticationEntryPointInterface`, as `OidcLoginAuthenticator` does. It saves the denied page as the target path and starts an authorization request with `prompt=login` and the current ID token as `id_token_hint`.
 
 RP-Initiated Logout is implemented by the core `OidcEndSessionListener` which registers on the firewall's own event dispatcher at priority 65. When `enable_end_session: true`, on logout it redirects to the provider `end_session_endpoint` with `id_token_hint` (the serialized ID token JWT string) and `post_logout_redirect_uri` (the absolute URL of `post_logout_redirect_path`). Keycloak requires the client attribute `post.logout.redirect.uris` to be registered for the redirect to succeed. When the provider does not announce an `end_session_endpoint` or it is not HTTPS, logout completes in the application alone and a warning is logged.
 
@@ -141,7 +155,7 @@ RP-Initiated Logout is implemented by the core `OidcEndSessionListener` which re
 `docker/keycloak/realm-demo.json` seeds:
 
 - Realm `demo` with `sslRequired: none` (Keycloak itself terminates TLS on 8443, the healthcheck uses the internal HTTP port), HSTS disabled (HSTS is host-scoped and would force HTTPS on the plain-HTTP app on another localhost port), French among the supported locales, and a light login theme
-- Four clients: `symfony-demo` (baseline, client-secret), `symfony-demo-public` (public client, no secret), `symfony-demo-es256` (EC key, ES256 signature), `symfony-demo-plain` (accepts plain PKCE method). All register `http://localhost:8001/*` as redirect URI and `http://localhost:8001/*` as post logout redirect URI
+- Seven clients: `symfony-demo` (baseline, client-secret), `symfony-demo-public` (public client, no secret), `symfony-demo-es256` (EC key, ES256 signature), `symfony-demo-plain` (accepts plain PKCE method), `symfony-demo-refresh` (access tokens living 60 seconds, `access.token.lifespan`), `symfony-demo-jwt` (`client-secret-jwt` authenticator, a secret of more than 32 bytes), `symfony-demo-pkjwt` (`client-jwt` authenticator, the public key of the client as its `jwks.string`). All register `http://localhost:8001/*` as redirect URI and `http://localhost:8001/*` as post logout redirect URI
 - Two users: `alice` (password `alice`, roles `admin`, `editor`) and `bob` (password `bob`, role `editor`)
 - Realm roles: `admin` and `editor`
 - A protocol mapper that puts realm roles in the `realm_access.roles` claim in the UserInfo response
@@ -149,9 +163,9 @@ RP-Initiated Logout is implemented by the core `OidcEndSessionListener` which re
 
 ## Tests
 
-`castor test` runs PHPUnit without Docker. The provider is faked at the HTTP transport level through `framework.http_client.mock_response_factory`, the keys are generated per run, and the real firewalls and the real authenticator run. The suite covers each scenario end to end, the failures (state, replay, signature, nonce, provider error, UserInfo sub, missing auth_time), logout, and routes.
+`castor test` runs PHPUnit without Docker. The provider is faked at the HTTP transport level through `framework.http_client.mock_response_factory`, the keys are generated per run, and the real firewalls and the real authenticator run. The suite covers each scenario end to end, the failures (state, replay, signature, nonce, provider error, UserInfo sub, missing auth_time), logout, and routes; the fake provider verifies the client assertions of `secretjwt` and `privatekeyjwt`, answers the refresh token grant, and the `clock` service is a `MockClock` so that the tests of `refresh` and `reauth` move time forward instead of waiting.
 
-`castor smoke` runs `bin/smoke.sh` against the real Keycloak for each scenario. It follows the redirect chain through the provider and verifies the page content, including that the provider session is gone after logout (it proves RP-Initiated Logout worked).
+`castor smoke` runs `bin/smoke.sh` against the real Keycloak for each scenario. It follows the redirect chain through the provider and verifies the page content, including that the provider session is gone after logout (it proves RP-Initiated Logout worked). For `refresh` it waits 31 seconds and checks the renewal, for `reauth` it waits 61 seconds and goes through the re-authentication.
 
 ## Things worth knowing
 
@@ -162,20 +176,25 @@ RP-Initiated Logout is implemented by the core `OidcEndSessionListener` which re
 - A `roles` claim never grants roles through the built-in provider
 - The discovery document and the JWKS are cached in `cache.app` (so `castor cc` after re-creating the Keycloak container)
 - A container clock drifting from the host breaks the time claims unless `allowed_time_drift` tolerates it
-- A firewall cannot be named `id_token` (nor `discovery`, `client`, `public_client`, `signature_verifier` or `end_session_listener`): the bundle registers the authenticator as `security.authenticator.oidc_login.<firewall>`, which then collides with its own helper service of that name and the container reports a circular reference. That is why the scenario is called `idtoken`
+- A firewall cannot be named `id_token` (nor `discovery`, `client`, `signature_verifier`, `end_session_listener`, `token_refresher`, `token_refresh_listener`, `route_loader` or `start_controller`): the bundle registers the authenticator as `security.authenticator.oidc_login.<firewall>`, which then collides with its own helper service of that name and the container reports a circular reference. That is why the scenario is called `idtoken`
+- The proof time of an OIDC login is the `auth_time` of the ID token, when the provider last checked the credentials: a login answered from an existing Keycloak session carries that older time, so the `reauth` sensitive page may ask for the password right after such a login. The `acr` claim tells the two apart at Keycloak (`1` after a password, `0` from its session)
+- `client_secret_jwt` keys an HMAC with the secret, which must then be at least as long as the digest (32 bytes for HS256); the provider holds the same secret, which is why `private_key_jwt` is the stronger method
+- The authenticator reads a `form_post` response (`authorization_params: { response_mode: form_post }`), but in a browser the provider then POSTs the callback cross-site, and a `SameSite=Lax` session cookie (the Symfony default) does not travel with it: the state check fails with *Invalid OIDC state parameter*, and the answer replaces the session cookie. Here the app is plain HTTP and Keycloak HTTPS, which is cross-site even on the same host, so the demo has no `form_post` scenario; in a real deployment it works when the provider is same-site, or with a `SameSite=None; Secure` session cookie
 
 ## Layout
 
 ```
 castor.php                                    Castor tasks (install, start, stop, smoke, test, qa, fmt, cc, logs, open, restart, clean)
 compose.yaml                                  Docker Compose with Keycloak 26.7
-config/packages/security.yaml                Ten oidc_login firewalls, one scenario each
+config/packages/security.yaml                Fifteen oidc_login firewalls, one scenario each
 config/packages/http_client.yaml             Trusts the demo certificate for HTTPS to localhost:8443
 config/routes/security.yaml                  Imports the OIDC callback route loader
 docker/keycloak/realm-demo.json              Keycloak realm, four clients, two users and their roles
 docker/generate-certs.sh                      Generates TLS certificates for Keycloak
 src/Demo/Scenarios.php                        Catalogue of scenarios and their metadata
 src/Security/KeycloakUserProvider.php          Maps Keycloak realm roles onto Symfony roles
+src/Security/LoginHintListener.php             Tailors the authorization request of the hint scenario per request
+src/Controller/ReauthController.php            The sensitive page of the reauth scenario
 src/Trace/*                                   Records and displays the flow trace on the account page
 tests/                                       PHPUnit suite with a fake provider at HTTP transport level
 mago.toml                                     Mago configuration, with linter-baseline.toml and analyzer-baseline.toml for the pre-existing findings
@@ -186,3 +205,5 @@ bin/smoke.sh                                  Browserless end-to-end login again
 ## Feature pull requests
 
 The `oidc_login` authenticator is the result of these merged pull requests: [symfony/symfony#64954](https://github.com/symfony/symfony/pull/64954) (the authenticator), [symfony/symfony#65799](https://github.com/symfony/symfony/pull/65799) (token endpoint client authentication methods), [symfony/symfony#65798](https://github.com/symfony/symfony/pull/65798) (ID token signature verification), [symfony/symfony#65813](https://github.com/symfony/symfony/pull/65813) (public clients must verify the signature), [symfony/symfony#65814](https://github.com/symfony/symfony/pull/65814) (PKCE, max_age, authorization_params, start route), [symfony/symfony#65800](https://github.com/symfony/symfony/pull/65800) (route loader always registered), [symfony/symfony#65817](https://github.com/symfony/symfony/pull/65817) (`user_data_source`, `user_identifier_claim` and RP-Initiated Logout), and the documentation pull request [symfony/symfony-docs#22881](https://github.com/symfony/symfony-docs/pull/22881).
+
+Merged since, and shown here: [#65875](https://github.com/symfony/symfony/pull/65875) (refresh token grant), [#65916](https://github.com/symfony/symfony/pull/65916) (`private_key_jwt` and `client_secret_jwt`), [#66047](https://github.com/symfony/symfony/pull/66047) (`OidcAuthorizationRequestEvent`), [#66014](https://github.com/symfony/symfony/pull/66014), [#66016](https://github.com/symfony/symfony/pull/66016), [#66055](https://github.com/symfony/symfony/pull/66055), [#66065](https://github.com/symfony/symfony/pull/66065), [#66066](https://github.com/symfony/symfony/pull/66066) and [#66242](https://github.com/symfony/symfony/pull/66242) (recent authentication, authentication proofs and re-authentication), [#66015](https://github.com/symfony/symfony/pull/66015) (`auth_time` as the proof time), [#66184](https://github.com/symfony/symfony/pull/66184) (`acr`), [#65910](https://github.com/symfony/symfony/pull/65910) (`http_client`). Merged and active without configuration: [#65895](https://github.com/symfony/symfony/pull/65895) (client authentication services), [#65908](https://github.com/symfony/symfony/pull/65908) (hardening against malformed provider data and mix-up attacks), [#65951](https://github.com/symfony/symfony/pull/65951) (no redirects followed on the provider endpoints), [#65971](https://github.com/symfony/symfony/pull/65971) (secure URL checks), [#66135](https://github.com/symfony/symfony/pull/66135) (`sub` required in the ID token, shorter nonce), [#66195](https://github.com/symfony/symfony/pull/66195) (`form_post`).
