@@ -2,6 +2,7 @@
 
 namespace App\Tests\Oidc;
 
+use Jose\Component\Core\JWK;
 use Jose\Component\KeyManagement\JWKFactory;
 
 /**
@@ -11,12 +12,19 @@ use Jose\Component\KeyManagement\JWKFactory;
  */
 final class TestKeys
 {
+    /** @var array{private_key: JWK, public_key: JWK}|null */
     private static ?array $providerRsaKey = null;
+
+    /** @var array{private_key: JWK, public_key: JWK}|null */
     private static ?array $providerEcKey = null;
+
+    /** @var array{private_key: JWK, public_key: JWK}|null */
     private static ?array $impostorRsaKey = null;
 
     /**
      * Generate and return the provider RSA key (kid: rsa-test).
+     *
+     * @return array{private_key: JWK, public_key: JWK}
      */
     public static function providerRsaKey(): array
     {
@@ -29,6 +37,8 @@ final class TestKeys
 
     /**
      * Generate and return the provider EC key (kid: ec-test, ES256).
+     *
+     * @return array{private_key: JWK, public_key: JWK}
      */
     public static function providerEcKey(): array
     {
@@ -42,6 +52,8 @@ final class TestKeys
     /**
      * Generate and return the impostor RSA key (kid: rsa-test, same as provider RSA key).
      * This key is used for signature rejection tests.
+     *
+     * @return array{private_key: JWK, public_key: JWK}
      */
     public static function impostorRsaKey(): array
     {
@@ -67,6 +79,8 @@ final class TestKeys
 
     /**
      * Create an RSA key with the given kid and alg.
+     *
+     * @return array{private_key: JWK, public_key: JWK}
      */
     private static function createRsaKey(string $kid, string $alg): array
     {
@@ -84,6 +98,8 @@ final class TestKeys
 
     /**
      * Create an EC key with the given kid, alg and curve.
+     *
+     * @return array{private_key: JWK, public_key: JWK}
      */
     private static function createEcKey(string $kid, string $alg, string $curve): array
     {

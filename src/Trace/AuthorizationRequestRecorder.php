@@ -76,7 +76,9 @@ final class AuthorizationRequestRecorder
         // Determine the trigger: the start route, the entry point, or a re-authentication, which
         // the firewall starts for a denied attribute it names in a request attribute
         $route = $request->attributes->get('_route', '');
-        $reAuthenticationAttribute = $request->attributes->get(SecurityRequestAttributes::RE_AUTHENTICATION_ATTRIBUTE);
+        $reAuthenticationAttribute = $request->attributes->has(SecurityRequestAttributes::RE_AUTHENTICATION_ATTRIBUTE)
+            ? $request->attributes->getString(SecurityRequestAttributes::RE_AUTHENTICATION_ATTRIBUTE)
+            : null;
         $trigger = match (true) {
             null !== $reAuthenticationAttribute => 're_authentication',
             str_starts_with($route, '_oidc_login_start_') => 'start_route',
@@ -103,7 +105,7 @@ final class AuthorizationRequestRecorder
             'params' => $orderedParams,
             'started_at' => $startedAt,
             'trigger' => $trigger,
-            're_authentication_attribute' => is_string($reAuthenticationAttribute) ? $reAuthenticationAttribute : null,
+            're_authentication_attribute' => $reAuthenticationAttribute,
             'requested_path' => $request->getPathInfo(),
             'firewall' => $firewall,
         ];

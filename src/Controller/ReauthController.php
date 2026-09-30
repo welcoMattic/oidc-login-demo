@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,6 +25,7 @@ final class ReauthController extends AbstractController
     #[IsGranted('IS_AUTHENTICATED_VERY_RECENTLY')]
     public function sensitive(
         TokenStorageInterface $tokenStorage,
+        ClockInterface $clock,
         #[Autowire(param: 'security.very_recent_authentication_lifetime')]
         int $lifetime,
     ): Response {
@@ -34,7 +36,7 @@ final class ReauthController extends AbstractController
             'proofs' => $token?->getAuthenticationProofs() ?? [],
             'acr' => $token?->hasAttribute('oidc_acr') ? $token->getAttribute('oidc_acr') : null,
             'lifetime' => $lifetime,
-            'now' => time(),
+            'now' => $clock->now()->getTimestamp(),
         ]);
     }
 }

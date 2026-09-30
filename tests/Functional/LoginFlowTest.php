@@ -12,7 +12,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 class LoginFlowTest extends WebTestCase
 {
     /**
-     * Data provider for all ten scenarios.
+     * Data provider for all fifteen scenarios.
      */
     public static function scenarioProvider(): array
     {
@@ -27,6 +27,11 @@ class LoginFlowTest extends WebTestCase
             ['email'],
             ['idtoken'],
             ['callback'],
+            ['refresh'],
+            ['secretjwt'],
+            ['privatekeyjwt'],
+            ['reauth'],
+            ['hint'],
         ];
     }
 
@@ -91,10 +96,22 @@ class LoginFlowTest extends WebTestCase
             case 'roles':
             case 'email':
             case 'idtoken':
+            case 'refresh':
+            case 'secretjwt':
+            case 'privatekeyjwt':
+            case 'reauth':
                 // These should have S256 PKCE by default
                 $this->assertArrayHasKey('code_challenge', $params);
                 $this->assertArrayHasKey('code_challenge_method', $params);
                 $this->assertEquals('S256', $params['code_challenge_method']);
+                break;
+            case 'hint':
+                // S256 PKCE, the static prompt, and what LoginHintListener adds: no login_hint
+                // without one in the query, and the default locale without an Accept-Language
+                $this->assertSame('S256', $params['code_challenge_method'] ?? null);
+                $this->assertSame('login', $params['prompt'] ?? null);
+                $this->assertArrayNotHasKey('login_hint', $params);
+                $this->assertSame('en', $params['ui_locales'] ?? null);
                 break;
             case 'plain':
                 // Plain should have PKCE with plain method

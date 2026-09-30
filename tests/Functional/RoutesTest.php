@@ -17,7 +17,22 @@ class RoutesTest extends WebTestCase
         $client = static::createClient();
         $client->disableReboot();
 
-        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken'];
+        $firewalls = [
+            'default',
+            'basic',
+            'public',
+            'strict',
+            'es256',
+            'plain',
+            'roles',
+            'email',
+            'idtoken',
+            'refresh',
+            'secretjwt',
+            'privatekeyjwt',
+            'reauth',
+            'hint',
+        ];
 
         foreach ($firewalls as $firewall) {
             // Test callback route
@@ -107,6 +122,11 @@ class RoutesTest extends WebTestCase
             'email',
             'idtoken',
             'callback',
+            'refresh',
+            'secretjwt',
+            'privatekeyjwt',
+            'reauth',
+            'hint',
         ];
 
         foreach ($firewalls as $firewall) {
@@ -134,7 +154,22 @@ class RoutesTest extends WebTestCase
         $client = static::createClient();
         $client->disableReboot();
 
-        $firewalls = ['default', 'basic', 'public', 'strict', 'es256', 'plain', 'roles', 'email', 'idtoken'];
+        $firewalls = [
+            'default',
+            'basic',
+            'public',
+            'strict',
+            'es256',
+            'plain',
+            'roles',
+            'email',
+            'idtoken',
+            'refresh',
+            'secretjwt',
+            'privatekeyjwt',
+            'reauth',
+            'hint',
+        ];
 
         $router = static::getContainer()->get('router');
 

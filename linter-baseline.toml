@@ -61,18 +61,6 @@ message = "Use strict assertions in PHPUnit tests."
 count = 6
 
 [[issues]]
-file = "tests/Oidc/FakeKeycloak.php"
-code = "no-insecure-comparison"
-message = "Insecure comparison of sensitive data."
-count = 3
-
-[[issues]]
-file = "tests/Oidc/FakeKeycloak.php"
-code = "strict-behavior"
-message = "Call to `base64_decode` must enforce strict comparison."
-count = 1
-
-[[issues]]
 file = "tests/Unit/Security/KeycloakUserProviderTest.php"
 code = "strict-assertions"
 message = "Use strict assertions in PHPUnit tests."

@@ -2,6 +2,10 @@ services:
     # Service for FakeKeycloak - this will be shared across all requests
     App\Tests\Oidc\FakeKeycloak:
         class: App\Tests\Oidc\FakeKeycloak
+        arguments:
+            # the MockClock of clock.yaml: the fake dates its tokens with the very clock
+            # the firewall checks them against, so that moving it keeps both in step
+            $clock: '@clock'
 
     # Replace the http_client service with our mock client that uses the shared FakeKeycloak
     http_client:

@@ -2,6 +2,7 @@
 
 namespace App\Trace;
 
+use Psr\Clock\ClockInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
@@ -24,6 +25,7 @@ final class TokenRefreshRecorder
     public function __construct(
         private readonly OidcHttpRecorder $httpRecorder,
         private readonly Security $security,
+        private readonly ClockInterface $clock,
     ) {}
 
     public function __invoke(ControllerEvent $event): void
@@ -40,29 +42,21 @@ final class TokenRefreshRecorder
 
         $renewals = [];
         foreach ($this->httpRecorder->getExchanges() as $exchange) {
-            $body = $exchange['options']['body'] ?? null;
-            if (is_string($body)) {
-                parse_str($body, $body);
-            }
+            $body = self::formBody($exchange['options']['body'] ?? null);
 
-            if (
-                'POST' !== $exchange['method']
-                || !is_array($body)
-                || !in_array($body['grant_type'] ?? null, ['refresh_token'], true)
-            ) {
+            if ('POST' !== $exchange['method'] || !in_array($body['grant_type'] ?? null, ['refresh_token'], true)) {
                 continue;
             }
 
             try {
                 $status = $exchange['response']->getStatusCode();
-                $json = json_decode($exchange['response']->getContent(false), true);
+                $json = self::jsonObject($exchange['response']->getContent(false));
             } catch (\Throwable) {
                 continue;
             }
-            $json = is_array($json) ? $json : [];
 
             $renewals[] = [
-                'at' => time(),
+                'at' => $this->clock->now()->getTimestamp(),
                 'status' => $status,
                 'error' => is_string($json['error'] ?? null) ? $json['error'] : null,
                 'expires_in' => is_int($json['expires_in'] ?? null) ? $json['expires_in'] : null,
@@ -76,8 +70,45 @@ final class TokenRefreshRecorder
         }
 
         $session = $request->getSession();
-        $history = $session->get(self::SESSION_KEY_PREFIX . $firewall, []);
-        $history = array_slice([...(is_array($history) ? $history : []), ...$renewals], -self::MAX_ENTRIES);
-        $session->set(self::SESSION_KEY_PREFIX . $firewall, $history);
+        $history = self::arrayOrEmpty($session->get(self::SESSION_KEY_PREFIX . $firewall));
+        $session->set(self::SESSION_KEY_PREFIX . $firewall, array_slice(
+            [...$history, ...$renewals],
+            -self::MAX_ENTRIES,
+        ));
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private static function formBody(mixed $body): array
+    {
+        if (is_string($body)) {
+            $fields = [];
+            parse_str($body, $fields);
+
+            return $fields;
+        }
+
+        return self::arrayOrEmpty($body);
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private static function jsonObject(string $content): array
+    {
+        try {
+            return self::arrayOrEmpty(json_decode($content, true, 512, JSON_THROW_ON_ERROR));
+        } catch (\JsonException) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private static function arrayOrEmpty(mixed $value): array
+    {
+        return is_array($value) ? $value : [];
     }
 }

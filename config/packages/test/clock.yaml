@@ -1,0 +1,8 @@
+# The whole application reads the time from the "clock" service: the ID token checks, the
+# expiry of the access token, the client assertions, and the authentication proofs that
+# IS_AUTHENTICATED_VERY_RECENTLY is decided on. A MockClock, frozen when the kernel boots,
+# lets a test move time forward with $clock->sleep() instead of waiting; the fake provider
+# dates its tokens with the same clock (see framework.yaml in this directory).
+services:
+    clock:
+        class: Symfony\Component\Clock\MockClock

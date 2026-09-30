@@ -158,6 +158,11 @@ class LogoutTest extends WebTestCase
             'email',
             'idtoken',
             'callback',
+            'refresh',
+            'secretjwt',
+            'privatekeyjwt',
+            'reauth',
+            'hint',
         ];
 
         foreach ($firewalls as $firewall) {

@@ -34,9 +34,10 @@ final class LoginHintListener
 
         // login_hint prefills the username field of the Keycloak login page. It comes from
         // the query string, so it is only a hint: the user can still type another username,
-        // and nothing is trusted from it once the provider has authenticated the user.
+        // and nothing is trusted from it once the provider has authenticated the user. The D
+        // modifier keeps $ from matching before a final newline.
         $loginHint = $request->query->getString('login_hint');
-        if (1 === preg_match('/^[\w.@+-]{1,64}$/', $loginHint)) {
+        if (1 === preg_match('/^[\w.@+-]{1,64}$/D', $loginHint)) {
             $event->setParam('login_hint', $loginHint);
         }
 
