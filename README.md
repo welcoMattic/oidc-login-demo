@@ -185,3 +185,7 @@ bin/smoke.sh                                  Browserless end-to-end login again
 ## Feature pull requests
 
 The `oidc_login` authenticator is the result of these merged pull requests: [symfony/symfony#64954](https://github.com/symfony/symfony/pull/64954) (the authenticator), [symfony/symfony#65799](https://github.com/symfony/symfony/pull/65799) (token endpoint client authentication methods), [symfony/symfony#65798](https://github.com/symfony/symfony/pull/65798) (ID token signature verification), [symfony/symfony#65813](https://github.com/symfony/symfony/pull/65813) (public clients must verify the signature), [symfony/symfony#65814](https://github.com/symfony/symfony/pull/65814) (PKCE, max_age, authorization_params, start route), [symfony/symfony#65800](https://github.com/symfony/symfony/pull/65800) (route loader always registered), [symfony/symfony#65817](https://github.com/symfony/symfony/pull/65817) (`user_data_source`, `user_identifier_claim` and RP-Initiated Logout), and the documentation pull request [symfony/symfony-docs#22881](https://github.com/symfony/symfony-docs/pull/22881).
+
+## Sponsors
+
+If this project is useful to you, you can support my open source work on [GitHub Sponsors](https://github.com/sponsors/welcoMattic). Tiers and what they fund: [blog.welcomattic.com/sponsors/en](https://blog.welcomattic.com/sponsors/en/). From the Company tier ($100 a month), your logo and a link appear here.
